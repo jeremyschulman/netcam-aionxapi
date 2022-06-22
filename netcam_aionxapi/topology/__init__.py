@@ -12,4 +12,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from . import eos_check_topology_design_service
+from . import nxapi_check_device_info

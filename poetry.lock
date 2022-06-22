@@ -1,14 +1,19 @@
 [[package]]
 name = "aio-nxapi"
-version = "0.4.1"
+version = "0.5.0"
 description = "Cisco NX-API asyncio client"
 category = "main"
 optional = false
 python-versions = "*"
+develop = false
 
 [package.dependencies]
 httpx = "*"
 lxml = "*"
+
+[package.source]
+type = "directory"
+url = "../aio-nxapi"
 
 [[package]]
 name = "anyio"
@@ -289,13 +294,10 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "2e1ada9bd350cad19249ca23e61b76893ba5e863173a25bd58408501ea9c47c6"
+content-hash = "d7c580026b0ffe8270a5393e1b5348d8ec8406a01cc603f8f7fa32c9c48a895b"
 
 [metadata.files]
-aio-nxapi = [
-    {file = "aio-nxapi-0.4.1.tar.gz", hash = "sha256:b22a1383ca0e60b8d8d9f4bf70155b4448c3082b399ebfa6019ff6eb569f18b4"},
-    {file = "aio_nxapi-0.4.1-py3-none-any.whl", hash = "sha256:0e814e47bf4e4a1a62dffd89bfc7fc147022536501667e69e74252adeb124b33"},
-]
+aio-nxapi = []
 anyio = [
     {file = "anyio-3.6.1-py3-none-any.whl", hash = "sha256:cb29b9c70620506a9a8f87a309591713446953302d7d995344d0d7c6c0c9a7be"},
     {file = "anyio-3.6.1.tar.gz", hash = "sha256:413adf95f93886e442aea925f3ee43baa5a765a64a0f52c6081894f9992fdd0b"},

@@ -28,7 +28,7 @@ from netcad.checks import (
 # Private Improts
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
+from netcam_aionxapi.nxapi_dut import NXAPIDeviceUnderTest
 
 # -----------------------------------------------------------------------------
 # Exports (None)
@@ -43,8 +43,8 @@ __all__ = ()
 # -----------------------------------------------------------------------------
 
 
-@EOSDeviceUnderTest.execute_checks.register
-async def eos_check_device_info(
+@NXAPIDeviceUnderTest.execute_checks.register
+async def nxapi_check_device_info(
     self, device_checks: DeviceInformationCheckCollection
 ) -> CheckResultsCollection:
     """
@@ -52,7 +52,7 @@ async def eos_check_device_info(
     function validates the product-model value.  It also captures the results
     of the 'show version' into a check-inforamation.
     """
-    dut: EOSDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest = self
     ver_info = dut.version_info
     results = list()
 
@@ -64,6 +64,7 @@ async def eos_check_device_info(
     exp_values = check.expected_results
 
     exp_product_model = exp_values.product_model
+    breakpoint()
     has_product_model = ver_info["modelName"]
 
     check_len = min(len(has_product_model), len(exp_product_model))

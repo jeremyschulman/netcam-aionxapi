@@ -22,7 +22,7 @@ from netcad.device import Device
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
+from netcam_aionxapi.nxapi_dut import NXAPIDeviceUnderTest
 
 # -----------------------------------------------------------------------------
 # Exports
@@ -37,11 +37,11 @@ __all__ = ["plugin_get_dut"]
 # -----------------------------------------------------------------------------
 
 
-def plugin_get_dut(device: Device) -> EOSDeviceUnderTest:
+def plugin_get_dut(device: Device) -> NXAPIDeviceUnderTest:
     """
     This function is the required netcam plugin hook that allows the netcam tool
     to obtain the DUT instance for a specific device.  The device instance MUST*
-    have the os_name attribute set to "eos".
+    have the os_name attribute set to "nx-os".
 
     Parameters
     ----------
@@ -58,9 +58,9 @@ def plugin_get_dut(device: Device) -> EOSDeviceUnderTest:
     The EOS device-under-test instance used for operational checking.
     """
 
-    if device.os_name != "eos":
+    if device.os_name != "nx-os":
         raise RuntimeError(
             f"Missing required DUT class for device {device.name}, os_name: {device.os_name}"
         )
 
-    return EOSDeviceUnderTest(device=device)
+    return NXAPIDeviceUnderTest(device=device)

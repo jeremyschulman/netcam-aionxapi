@@ -1,4 +1,4 @@
-#  Copyright 2021 Jeremy Schulman
+#  Copyright 2022 Jeremy Schulman
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 #  limitations under the License.
 
 # =============================================================================
-# This file contains the EOS "Device Under Test" class definition.  This is
-# where the specific check-executors are wired into the class to support the
-# various design-service checks.
+# This file contains the NX-OS NXAPI "Device Under Test" class definition.
+# This is where the specific check-executors are wired into the class to
+# support the various design-service checks.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ from functools import singledispatchmethod
 # -----------------------------------------------------------------------------
 
 import httpx
-from aioeapi import Device as DeviceEAPI
+from aionxapi import Device as DeviceNXAPI
 
 from netcad.device import Device
 from netcad.checks import CheckCollection
@@ -42,13 +42,13 @@ from netcad.netcam import CheckResultsCollection
 # Privae Imports
 # -----------------------------------------------------------------------------
 
-from .nxapi_config import g_eos
+from .nxapi_config import g_nxapi
 
 # -----------------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------------
 
-__all__ = ["EOSDeviceUnderTest"]
+__all__ = ["NXAPIDeviceUnderTest"]
 
 
 # -----------------------------------------------------------------------------
@@ -58,17 +58,18 @@ __all__ = ["EOSDeviceUnderTest"]
 # -----------------------------------------------------------------------------
 
 
-class EOSDeviceUnderTest(AsyncDeviceUnderTest):
+class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
     """
-    This class provides the Arista EOS device-under-test plugin for directly
-    communicating with the device via the EAPI interface.  The underpinning
-    transport is using asyncio.  Refer to the `aioeapi` distribution for further
-    details.
+    This class provides the Cisco NX-OS NAPI device-under-test plugin for
+    directly communicating with the device via the NXAPI interface.  The
+    underpinning transport is using asyncio.  Refer to the `aio-nxapi` package
+    for further details.
 
     Attributes
     ----------
-    eapi: aioeapi.Device
-        The asyncio driver instance used to communicate with the EOS eAPI.
+    nxapi: aionxapi.Device
+        The asyncio driver instance used to communicate with the device via
+        NXAPI.
 
     version_info: dict
         The results of 'show version' that is extracted from the device during
@@ -80,7 +81,8 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
 
         super().__init__(device=device)
 
-        self.eapi = DeviceEAPI(host=device.name, auth=g_eos.basic_auth)
+        # use JSON format by default
+        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxapi.basic_auth)
         self.version_info: Optional[dict] = None
 
         # inialize the DUT cache mechanism; used exclusvely by the
@@ -95,10 +97,12 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
     #
     # -------------------------------------------------------------------------
 
-    async def api_cache_get(self, key: str, command: str, **kwargs) -> dict | str:
+    async def api_cache_get(
+        self, command: str, key: Optional[str] = None, **kwargs
+    ) -> dict | str:
         """
         This function is used by other class methods that want to abstract the
-        collection function of a given eAPI routine so that the results of that
+        collection function of a given NXAPI call so that the results of that
         call are cached and avaialble for other check executors.  This method
         should not be called outside other methods of this DUT class, but this
         is not a hard constraint.
@@ -110,19 +114,20 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
 
         Parameters
         ----------
-        key: str
+        command: str
+            The actual NX-OS CLI command used to obtain the NXAPI results.  This
+            value will by default be used as the cache-key.
+
+        key: str, optional
             The cache-key string that is used to uniquely identify the contents
             of the cache.  For example 'switchports' may be the cache key to cache
             the results of the 'show interfaces switchport' command.
-
-        command: str
-            The actual EOS CLI command used to obtain the eAPI results.
 
         Other Parameters
         ----------------
         Any keyword-args supported by the underlying eAPI Device driver; for
         example `ofmt` can be used to change the output format from the default
-        of dict to text.  Refer to the aio-eapi package for further details.
+        of XML to text.  Refer to the aio-nxapi package for further details.
 
         Returns
         -------
@@ -130,20 +135,14 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
         or the newly retrieved data from the device; which is then cached for
         future use.
         """
+
         async with self._api_cache_lock:
-            if not (has_data := self._api_cache.get(key)):
-                has_data = await self.eapi.cli(command, **kwargs)
-                self._api_cache[key] = has_data
+            _c_key = key or command
+            if not (has_data := self._api_cache.get(_c_key)):
+                has_data = await self.nxapi.cli(command, **kwargs)
+                self._api_cache[_c_key] = has_data
 
             return has_data
-
-    async def get_switchports(self) -> dict:
-        """
-        Return the device operational status of interface switchports.
-        """
-        return await self.api_cache_get(
-            key="switchports", command="show interfaces switchport"
-        )
 
     # -------------------------------------------------------------------------
     #
@@ -155,18 +154,18 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
         """DUT setup process"""
         await super().setup()
 
-        if not await self.eapi.check_connection():
+        if not await self.nxapi.check_connection():
             raise RuntimeError(
-                f"Unable to connect to EOS device: {self.device.name}: "
-                "Device offline or eAPI is not enabled, check config."
+                f"Unable to connect to NXAPI on device: {self.device.name}: "
+                "Device offline or NXAPI is not enabled, check config."
             )
 
         try:
-            self.version_info = await self.eapi.cli("show version")
+            self.version_info = await self.nxapi.cli("show version", ofmt="json")
 
         except httpx.HTTPError as exc:
             rt_exc = RuntimeError(
-                f"Unable to connect to EOS device {self.device.name}: {str(exc)}"
+                f"Unable to connect to NXAPI device {self.device.name}: {str(exc)}"
             )
             rt_exc.__traceback__ = exc.__traceback__
             await self.teardown()
@@ -174,7 +173,7 @@ class EOSDeviceUnderTest(AsyncDeviceUnderTest):
 
     async def teardown(self):
         """DUT tearndown process"""
-        await self.eapi.aclose()
+        await self.nxapi.aclose()
 
     @singledispatchmethod
     async def execute_checks(
