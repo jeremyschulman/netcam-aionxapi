@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "netcad-aionxapi"
+version = "0.0.1"
+description = "NetCAD driver for NX-OS NXAPI (asyncio)"
+readme = "README.md"
+authors = ["Jeremy Schulman"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+aio-nxapi = "*"
+interrogate = "*"
+
+[tool.poetry.dev-dependencies]
+pytest = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.interrogate]
+    fail-under = 0
+    verbose = 1
+    color = true
+    ignore-module = true
+    exclude = ["tasks.py", "examples", "build", "venv"]
