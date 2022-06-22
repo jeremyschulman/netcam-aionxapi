@@ -34,14 +34,14 @@ from netcad.checks import check_result_types as trt
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
+from ..nxapi_dut import NXAPIDeviceUnderTest
 
 
 # -----------------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------------
 
-__all__ = ["eos_test_cabling", "eos_test_one_interface"]
+__all__ = []
 
 # -----------------------------------------------------------------------------
 #
@@ -50,8 +50,8 @@ __all__ = ["eos_test_cabling", "eos_test_one_interface"]
 # -----------------------------------------------------------------------------
 
 
-@EOSDeviceUnderTest.execute_checks.register
-async def eos_test_cabling(
+@NXAPIDeviceUnderTest.execute_checks.register
+async def nxapi_test_cabling(
     self, testcases: InterfaceCablingCheckCollection
 ) -> trt.CheckResultsCollection:
     """
@@ -72,15 +72,18 @@ async def eos_test_cabling(
     ------
     Netcad test-case items.
     """
-    dut: EOSDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest = self
     device = dut.device
     results = list()
 
-    cli_lldp_rsp = await dut.eapi.cli("show lldp neighbors")
+    cli_lldp_rsp = await dut.nxapi.cli("show lldp neighbors")
 
     # create a map of local interface name to the LLDP neighbor record.
 
-    dev_lldpnei_ifname = {nei["port"]: nei for nei in cli_lldp_rsp["lldpNeighbors"]}
+    dev_lldpnei_ifname = {
+        dut.expand_inteface_name(nei["l_port_id"]): nei
+        for nei in cli_lldp_rsp["TABLE_nbor"]["ROW_nbor"]
+    }
 
     for check in testcases.checks:
         if_name = check.check_id()
@@ -90,7 +93,7 @@ async def eos_test_cabling(
             continue
 
         results.extend(
-            eos_test_one_interface(
+            _test_one_interface(
                 device=dut.device,
                 check=check,
                 ifnei_status=port_nei,
@@ -100,7 +103,7 @@ async def eos_test_cabling(
     return results
 
 
-def eos_test_one_interface(
+def _test_one_interface(
     device: Device, check: InterfaceCablingCheck, ifnei_status: dict
 ) -> trt.CheckResultsCollection:
     """
@@ -111,8 +114,8 @@ def eos_test_one_interface(
     expd_name = check.expected_results.device
     expd_port_id = check.expected_results.port_id
 
-    msrd_name = ifnei_status["neighborDevice"]
-    msrd_port_id = ifnei_status["neighborPort"]
+    msrd_name = ifnei_status["chassis_id"]
+    msrd_port_id = ifnei_status["port_id"]
 
     if not nei_hostname_match(expd_name, msrd_name):
         results.append(

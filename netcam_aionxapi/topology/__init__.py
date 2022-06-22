@@ -15,3 +15,4 @@
 from . import nxapi_check_device_info
 from . import nxapi_check_interfaces
 from . import nxapi_check_ipaddrs
+from . import nxapi_check_cabling
