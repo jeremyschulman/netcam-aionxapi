@@ -82,7 +82,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
         super().__init__(device=device)
 
         # use JSON format by default
-        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxapi.basic_auth)
+        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxapi.basic_auth, timeout=60)
         self.nxapi.ofmt = "json"
 
         self.version_info: Optional[dict] = None
@@ -202,6 +202,16 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
             return _get(i) if isinstance(o, dict) else _get(int(i))
 
         return reduce(lambda a, i: get(a, i), spec.split("."), data)
+
+    @staticmethod
+    def expand_inteface_name(if_name: str) -> str:
+        if if_name.startswith("Lo") and not if_name.startswith("Loopback"):
+            return if_name.replace("Lo", "Loopback")
+
+        if if_name.startswith("Eth") and not if_name.startswith("Ethernet"):
+            return if_name.replace("Eth", "Ethernet")
+
+        return if_name
 
     @singledispatchmethod
     async def execute_checks(

@@ -38,15 +38,14 @@ from netcad.checks import check_result_types as trt
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
+from ..nxapi_dut import NXAPIDeviceUnderTest
 
 
 # -----------------------------------------------------------------------------
-# Exports
+# Exports (None)
 # -----------------------------------------------------------------------------
 
-__all__ = ["eos_test_ipaddrs"]
-
+__all__ = []
 
 # -----------------------------------------------------------------------------
 #
@@ -55,8 +54,8 @@ __all__ = ["eos_test_ipaddrs"]
 # -----------------------------------------------------------------------------
 
 
-@EOSDeviceUnderTest.execute_checks.register
-async def eos_test_ipaddrs(
+@NXAPIDeviceUnderTest.execute_checks.register
+async def nxapi_test_ipaddrs(
     self, collection: IPInterfacesCheckCollection
 ) -> trt.CheckResultsCollection:
     """
@@ -64,10 +63,19 @@ async def eos_test_ipaddrs(
     those that are defined in the design.
     """
 
-    dut: EOSDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest = self
     device = dut.device
-    cli_rsp = await dut.eapi.cli("show ip interface brief")
-    dev_ips_data = cli_rsp["interfaces"]
+    cli_rsp = await dut.nxapi.cli("show ip interface vrf all")
+
+    # create an IP interface map using the interface-name as the key.  The
+    # interface name is not always cased correctly, for example "Loopback0" is
+    # reported as "loopback0". so title the value when storing the key.
+
+    map_ip_ifaces = {}
+    for entry in cli_rsp["TABLE_intf"]:
+        row_intf = entry["ROW_intf"]
+        intf_name: str = row_intf["intf-name"]
+        map_ip_ifaces[intf_name.title()] = row_intf
 
     results = list()
     if_names = list()
@@ -76,13 +84,13 @@ async def eos_test_ipaddrs(
         if_name = check.check_id()
         if_names.append(if_name)
 
-        if not (if_ip_data := dev_ips_data.get(if_name)):
+        if not (if_ip_data := map_ip_ifaces.get(if_name)):
             results.append(
                 trt.CheckFailNoExists(device=device, check=check, field="if_ipaddr")
             )
             continue
 
-        one_results = await eos_test_one_interface(
+        one_results = await _check_one_interface(
             dut, device=device, check=check, msrd_data=if_ip_data
         )
 
@@ -92,18 +100,19 @@ async def eos_test_ipaddrs(
     # conditional is checked by examining the interface IP address mask length
     # against zero.
 
-    if collection.exclusive:
-        results.extend(
-            eos_test_exclusive_list(
-                device=device,
-                expd_if_names=if_names,
-                msrd_if_names=[
-                    if_ip_data["name"]
-                    for if_ip_data in dev_ips_data.values()
-                    if if_ip_data["interfaceAddress"]["ipAddr"]["maskLen"] != 0
-                ],
-            )
-        )
+    # TODO:
+    # if collection.exclusive:
+    #     results.extend(
+    #         eos_test_exclusive_list(
+    #             device=device,
+    #             expd_if_names=if_names,
+    #             msrd_if_names=[
+    #                 if_ip_data["name"]
+    #                 for if_ip_data in dev_ips_data.values()
+    #                 if if_ip_data["interfaceAddress"]["ipAddr"]["maskLen"] != 0
+    #             ],
+    #         )
+    #     )
 
     return results
 
@@ -111,8 +120,8 @@ async def eos_test_ipaddrs(
 # -----------------------------------------------------------------------------
 
 
-async def eos_test_one_interface(
-    dut: "EOSDeviceUnderTest",
+async def _check_one_interface(
+    dut: NXAPIDeviceUnderTest,
     device: Device,
     check: IPInterfaceCheck,
     msrd_data: dict,
@@ -123,18 +132,18 @@ async def eos_test_one_interface(
     """
     results = list()
 
-    # get the interface name begin tested
+    # get the interface name being tested
 
     if_name = check.check_id()
 
     # -------------------------------------------------------------------------
-    # if there is any error accessing the expect interface IP address
+    # if there is any error accessing the expected interface IP address
     # information, then yeild a failure and return.
     # -------------------------------------------------------------------------
 
     try:
-        msrd_if_addr = msrd_data["interfaceAddress"]["ipAddr"]
-        msrd_if_ipaddr = f"{msrd_if_addr['address']}/{msrd_if_addr['maskLen']}"
+        msrd_if_addr = msrd_data["prefix"]
+        msrd_if_ipaddr = f"{msrd_if_addr}/{msrd_data['masklen']}"
 
     except KeyError:
         results.append(
@@ -189,7 +198,7 @@ async def eos_test_one_interface(
     dut_iface = dut_interfaces[if_name]
     iface_enabled = dut_iface["enabled"] is True
 
-    if iface_enabled and (if_oper := msrd_data["lineProtocolStatus"]) != "up":
+    if iface_enabled and (if_oper := msrd_data["proto-state"]) != "up":
 
         # if the interface is an SVI, then we need to check to see if _all_ of
         # the associated physical interfaces are either disabled or in a
@@ -222,7 +231,7 @@ async def eos_test_one_interface(
     return results
 
 
-def eos_test_exclusive_list(
+def _test_exclusive_list(
     device: Device, expd_if_names: Sequence[str], msrd_if_names: Sequence[str]
 ) -> Generator:
     """
@@ -252,13 +261,13 @@ def eos_test_exclusive_list(
 
 
 async def _check_vlan_assoc_interface(
-    dut: "EOSDeviceUnderTest", check, if_name: str, msrd_ipifaddr_oper
+    dut: NXAPIDeviceUnderTest, check, if_name: str, msrd_ipifaddr_oper
 ) -> trt.CheckResultsCollection:
     """
-    This coroutine is used to check whether a VLAN SVI ip address is not
-    "up" due to the fact that the underlying interfaces are either disabled or
-    in a "reserved" design; meaning we do not care if they are up or down. If
-    the SVI is down because of this condition, the test case will "pass", and an
+    This functions is used to check whether a VLAN SVI ip address is not "up"
+    due to the fact that the underlying interfaces are either disabled or in a
+    "reserved" design; meaning we do not care if they are up or down. If the
+    SVI is down because of this condition, the test case will "pass", and an
     information record is yielded to inform the User.
 
     Parameters
@@ -280,9 +289,16 @@ async def _check_vlan_assoc_interface(
     netcad test case results; one or more depending on the condition of SVI
     interfaces.
     """
+
     vlan_id = if_name.split("Vlan")[-1]
-    cli_res = await dut.eapi.cli(f"show vlan id {vlan_id} configured-ports")
-    vlan_cfgd_ifnames = set(cli_res["vlans"][vlan_id]["interfaces"])
+    cli_res = await dut.nxapi.cli(f"show vlan id {vlan_id}")
+
+    # the interface list is stored as a CSV, so unwind that into a set of interface-names
+    vlan_cfgd_ifnames = set(
+        cli_res["TABLE_vlanbriefid"]["ROW_vlanbriefid"]["vlanshowplist-ifidx"].split(
+            ","
+        )
+    )
     disrd_ifnames = set()
     dut_ifs = dut.device_info["interfaces"]
 

@@ -10,6 +10,7 @@ python = "^3.8"
 httpx = "*"
 interrogate = "*"
 aio-nxapi = {path = "../aio-nxapi"}
+pydantic = "^1.9.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
