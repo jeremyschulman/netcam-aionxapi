@@ -49,9 +49,9 @@ async def nxapi_check_device_info(
 ) -> CheckResultsCollection:
     """
     The check executor to validate the device information.  Presently this
-    function validates the product-model value.  It also captures the results
-    of the 'show version' into a check-inforamation.
+    function validates the product-model value.
     """
+
     dut: NXAPIDeviceUnderTest = self
     ver_info = dut.version_info
     results = list()
@@ -64,18 +64,19 @@ async def nxapi_check_device_info(
     exp_values = check.expected_results
 
     exp_product_model = exp_values.product_model
-    breakpoint()
-    has_product_model = ver_info["modelName"]
+    dev_hw = await dut.nxapi.cli("show hardware")
+    hw_row = dut.dig(dev_hw, "TABLE_slot.ROW_slot.TABLE_slot_info.ROW_slot_info.0")
+    has_model = hw_row["model_num"]
 
-    check_len = min(len(has_product_model), len(exp_product_model))
-    match = has_product_model[:check_len] == exp_product_model[:check_len]
+    check_len = min(len(has_model), len(exp_product_model))
+    match = has_model[:check_len] == exp_product_model[:check_len]
 
     if match:
         results.append(
             CheckPassResult(
                 device=dut.device,
                 check=check,
-                measurement=has_product_model,
+                measurement=has_model,
                 field="product_model",
             )
         )
@@ -84,9 +85,9 @@ async def nxapi_check_device_info(
             CheckFailResult(
                 device=dut.device,
                 check=check,
-                measurement=has_product_model,
+                measurement=has_model,
                 field="product_model",
-                error=f"Mismatch: product_model, expected {exp_product_model}, actual {has_product_model}",
+                error=f"Mismatch: product_model, expected {exp_product_model}, actual {has_model}",
             )
         )
 
@@ -94,7 +95,10 @@ async def nxapi_check_device_info(
 
     results.append(
         CheckInfoLog(
-            device=dut.device, check=check, field="version", measurement=ver_info
+            device=dut.device,
+            check=check,
+            field="version",
+            measurement=ver_info["rr_sys_ver"],
         )
     )
 

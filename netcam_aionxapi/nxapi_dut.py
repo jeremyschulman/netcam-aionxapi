@@ -24,7 +24,7 @@
 
 import asyncio
 from typing import Optional
-from functools import singledispatchmethod
+from functools import singledispatchmethod, reduce
 
 # -----------------------------------------------------------------------------
 # Public Imports
@@ -83,6 +83,8 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
 
         # use JSON format by default
         self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxapi.basic_auth)
+        self.nxapi.ofmt = "json"
+
         self.version_info: Optional[dict] = None
 
         # inialize the DUT cache mechanism; used exclusvely by the
@@ -161,7 +163,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
             )
 
         try:
-            self.version_info = await self.nxapi.cli("show version", ofmt="json")
+            self.version_info = await self.nxapi.cli("show version")
 
         except httpx.HTTPError as exc:
             rt_exc = RuntimeError(
@@ -174,6 +176,32 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
     async def teardown(self):
         """DUT tearndown process"""
         await self.nxapi.aclose()
+
+    @staticmethod
+    def dig(data: dict, spec: str):
+        """
+        This is a micro 'dig' function to get to a spot in a dictionary, only
+        processes dictionary key-values and list-objects.
+
+        Parameters
+        ----------
+        data: dict
+            The source data dictionary
+
+        spec: str
+            The 'dig' spec as a string in dotted notation, for example:
+            'TABLE_slot.ROW_slot.TABLE_slot_info.ROW_slot_info.0'
+
+        Returns
+        -------
+        The value as the end of the dig, or None
+        """
+
+        def get(o, i):
+            _get = o.__getitem__
+            return _get(i) if isinstance(o, dict) else _get(int(i))
+
+        return reduce(lambda a, i: get(a, i), spec.split("."), data)
 
     @singledispatchmethod
     async def execute_checks(
