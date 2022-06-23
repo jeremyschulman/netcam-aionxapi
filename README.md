@@ -27,7 +27,6 @@ environment.
 
     services = [
         "netcam_aionxapi.topology",
-        "netcam_aionxapi.vlans",
         "netcam_aionxapi.bgp_peering",
     ]
 
