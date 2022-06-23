@@ -72,6 +72,7 @@ def _check_router_vrf(
 ) -> bool:
 
     check_vrf = check.check_params.vrf or DEFAULT_VRF_NAME
+
     e_bgp_spkr: ElementBase = dev_data.xpath(
         f'TABLE_vrf/ROW_vrf[vrf-name-out = "{check_vrf}"]'
     )[0]

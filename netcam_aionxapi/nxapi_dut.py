@@ -142,7 +142,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
         async with self._api_cache_lock:
             _c_key = key or command
 
-            if (has_data := self._api_cache.get(_c_key)) is not None:
+            if (has_data := self._api_cache.get(_c_key)) is None:
                 has_data = await self.nxapi.cli(command, **kwargs)
                 self._api_cache[_c_key] = has_data
 
