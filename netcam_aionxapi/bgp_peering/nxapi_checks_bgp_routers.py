@@ -2,6 +2,8 @@
 # Public Imports
 # -----------------------------------------------------------------------------
 
+from lxml.etree import ElementBase
+
 from netcad.bgp_peering.checks import (
     BgpRoutersCheckCollection,
     BgpRouterCheck,
@@ -13,8 +15,8 @@ from netcad.checks import check_result_types as trt
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
-from .eos_check_bgp_peering_defs import EOS_DEFAULT_VRF_NAME
+from ..nxapi_dut import NXAPIDeviceUnderTest
+from .nxapi_check_bgp_peering_defs import DEFAULT_VRF_NAME
 
 # -----------------------------------------------------------------------------
 #
@@ -23,7 +25,7 @@ from .eos_check_bgp_peering_defs import EOS_DEFAULT_VRF_NAME
 # -----------------------------------------------------------------------------
 
 
-@EOSDeviceUnderTest.execute_checks.register
+@NXAPIDeviceUnderTest.execute_checks.register
 async def check_bgp_neighbors(
     self, check_bgp_routers: BgpRoutersCheckCollection
 ) -> trt.CheckResultsCollection:
@@ -45,9 +47,9 @@ async def check_bgp_neighbors(
     """
     results: trt.CheckResultsCollection = list()
     checks = check_bgp_routers.checks
-    dut: EOSDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest = self
 
-    dev_data = await dut.api_cache_get(key="bgp-summary", command="show ip bgp summary")
+    dev_data = await dut.api_cache_get(command="show bgp sessions", ofmt="xml")
 
     for rtr_chk in checks:
         _check_router_vrf(dut=dut, check=rtr_chk, dev_data=dev_data, results=results)
@@ -63,19 +65,23 @@ async def check_bgp_neighbors(
 
 
 def _check_router_vrf(
-    dut: EOSDeviceUnderTest,
+    dut: NXAPIDeviceUnderTest,
     check: BgpRouterCheck,
-    dev_data: dict,
+    dev_data: ElementBase,
     results: trt.CheckResultsCollection,
 ) -> bool:
 
-    dev_data = dev_data["vrfs"][check.check_params.vrf or EOS_DEFAULT_VRF_NAME]
+    check_vrf = check.check_params.vrf or DEFAULT_VRF_NAME
+    e_bgp_spkr: ElementBase = dev_data.xpath(
+        f'TABLE_vrf/ROW_vrf[vrf-name-out = "{check_vrf}"]'
+    )[0]
 
     expected = check.expected_results
     check_pass = True
 
     # from the device, routerId is a string
-    if (rtr_id := dev_data.get("routerId", "")) != expected.router_id:
+
+    if (rtr_id := e_bgp_spkr.findtext("router-id", default="")) != expected.router_id:
         results.append(
             trt.CheckFailFieldMismatch(
                 check=check, device=dut.device, field="router_id", measurement=rtr_id
@@ -83,12 +89,12 @@ def _check_router_vrf(
         )
         check_pass = False
 
-    # from the device, asn is an int
+    # from the device, asn is a string-int
 
-    if (dev_asn := dev_data.get("asn", -1)) != expected.asn:
+    if (rtr_asn := int(e_bgp_spkr.findtext("local-as", default="0"))) != expected.asn:
         results.append(
             trt.CheckFailFieldMismatch(
-                check=check, device=dut.device, field="asn", measurement=dev_asn
+                check=check, device=dut.device, field="asn", measurement=rtr_asn
             )
         )
         check_pass = False
@@ -98,7 +104,7 @@ def _check_router_vrf(
             trt.CheckPassResult(
                 device=dut.device,
                 check=check,
-                measurement=dict(routerId=rtr_id, asn=dev_asn),
+                measurement=dict(routerId=rtr_id, asn=rtr_asn),
             )
         )
 

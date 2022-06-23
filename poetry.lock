@@ -317,7 +317,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "c8c3abd754ec28191395024b5a254b081ef217d6b441e71d67ad73e3f986e443"
+content-hash = "32b7c8899eb953156168660540330d62452d3347329f5b940b2da758c43f460a"
 
 [metadata.files]
 aio-nxapi = []

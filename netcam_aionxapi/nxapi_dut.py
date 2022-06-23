@@ -31,6 +31,7 @@ from functools import singledispatchmethod, reduce
 # -----------------------------------------------------------------------------
 
 import httpx
+from lxml.etree import ElementBase
 from aionxapi import Device as DeviceNXAPI
 
 from netcad.device import Device
@@ -101,7 +102,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
 
     async def api_cache_get(
         self, command: str, key: Optional[str] = None, **kwargs
-    ) -> dict | str:
+    ) -> ElementBase | dict | str:
         """
         This function is used by other class methods that want to abstract the
         collection function of a given NXAPI call so that the results of that
@@ -140,7 +141,8 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
 
         async with self._api_cache_lock:
             _c_key = key or command
-            if not (has_data := self._api_cache.get(_c_key)):
+
+            if (has_data := self._api_cache.get(_c_key)) is not None:
                 has_data = await self.nxapi.cli(command, **kwargs)
                 self._api_cache[_c_key] = has_data
 
