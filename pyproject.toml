@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "netcad-aionxapi"
+name = "netcam-aionxapi"
 version = "0.0.1"
 description = "NetCAD driver for NX-OS NXAPI (asyncio)"
 readme = "README.md"
@@ -7,8 +7,11 @@ authors = ["Jeremy Schulman"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-aio-nxapi = "*"
+httpx = "*"
 interrogate = "*"
+aio-nxapi = {path = "../aio-nxapi"}
+pydantic = "^1.9.1"
+lxml = "*"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"

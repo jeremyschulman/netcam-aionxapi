@@ -17,7 +17,7 @@
 # System Imports
 # -----------------------------------------------------------------------------
 
-from typing import Set
+from typing import Set, Dict
 
 # -----------------------------------------------------------------------------
 # Public Imports
@@ -38,13 +38,13 @@ from netcad.checks import check_result_types as trt
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aioeos.eos_dut import EOSDeviceUnderTest
+from ..nxapi_dut import NXAPIDeviceUnderTest
 
 # -----------------------------------------------------------------------------
-# Exports
+# Exports (None)
 # -----------------------------------------------------------------------------
 
-__all__ = ["eos_check_transceivers"]
+__all__ = []
 
 
 # -----------------------------------------------------------------------------
@@ -54,8 +54,8 @@ __all__ = ["eos_check_transceivers"]
 # -----------------------------------------------------------------------------
 
 
-@EOSDeviceUnderTest.execute_checks.register
-async def eos_check_transceivers(
+@NXAPIDeviceUnderTest.execute_checks.register
+async def nxapi_check_transceivers(
     self, check_collection: TransceiverCheckCollection
 ) -> trt.CheckResultsCollection:
     """
@@ -69,25 +69,21 @@ async def eos_check_transceivers(
     the EOS inventor as "54".
     """
 
-    dut: EOSDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest = self
     device = dut.device
 
-    # obtain the transceiver _model_ information from the inventory command.
+    cli_ifxcvr_data = await dut.nxapi.cli("show interface transceiver")
 
-    cli_xcvrinv_resp_data = await dut.eapi.cli("show inventory")
-    dev_inv_ifstatus = cli_xcvrinv_resp_data["xcvrSlots"]
-
-    # obtain the transceiver _type_ information from the interfaces command.
-    # This payload has structure: .interfaces.<interface-name> = {}
-
-    cli_ifs_resp_data = await dut.eapi.cli("show interfaces hardware")
-    dev_ifhw_ifstatus = cli_ifs_resp_data["interfaces"]
+    map_ifxcvr_status = {
+        ifxcvr["interface"]: ifxcvr
+        for ifxcvr in cli_ifxcvr_data["TABLE_interface"]["ROW_interface"]
+    }
 
     # keep a set of the interface port numbers defined in the test cases so that
     # we can match that against the exclusive list vs. the transceivers in the
     # inventory.
 
-    if_port_numbers = set()
+    expd_ports_set = set()
 
     results = list()
 
@@ -103,9 +99,7 @@ async def eos_check_transceivers(
         if_name = check.check_id()
         dev_iface: DeviceInterface = device.interfaces[if_name]
 
-        if_pri_port = dev_iface.port_numbers[0]
-        ifaceinv = (dev_inv_ifstatus.get(str(if_pri_port)),)
-        ifacehw = (dev_ifhw_ifstatus.get(if_name),)
+        if_xcvr_status = map_ifxcvr_status.get(if_name)
 
         if dev_iface.profile.is_reserved:
             results.append(
@@ -114,32 +108,28 @@ async def eos_check_transceivers(
                     check=check,
                     measurement=dict(
                         message="interface is in reserved state",
-                        hardware=ifaceinv,  # from the show inventory command
-                        status=ifacehw,  # from the show interfaces ... hardware command
+                        status=if_xcvr_status,
                     ),
                 )
             )
-            rsvd_ports_set.add(if_pri_port)
+            rsvd_ports_set.add(if_name)
             continue
 
-        if_port_numbers.add(if_pri_port)
+        expd_ports_set.add(if_name)
 
         results.extend(
-            eos_test_one_interface(
-                device=device,
-                check=check,
-                ifaceinv=dev_inv_ifstatus.get(str(if_pri_port)),
-                ifacehw=dev_ifhw_ifstatus.get(if_name),
+            _check_one_interface(
+                device=device, check=check, if_xcvr_status=if_xcvr_status
             )
         )
 
     # next add the test coverage for the exclusive list.
     if check_collection.exclusive:
         results.extend(
-            eos_test_exclusive_list(
+            _check_exclusive_list(
                 device=device,
-                expd_ports=if_port_numbers,
-                msrd_ports=dev_inv_ifstatus,
+                expd_ports=expd_ports_set,
+                msrd_ports=map_ifxcvr_status,
                 rsvd_ports=rsvd_ports_set,
             )
         )
@@ -154,8 +144,8 @@ async def eos_check_transceivers(
 # -----------------------------------------------------------------------------
 
 
-def eos_test_exclusive_list(
-    device: Device, expd_ports, msrd_ports, rsvd_ports: Set
+def _check_exclusive_list(
+    device: Device, expd_ports: Set, msrd_ports: Dict[str, dict], rsvd_ports: Set
 ) -> trt.CheckResultsCollection:
     """
     Check to ensure that the list of transceivers found on the device matches the exclusive list.
@@ -166,11 +156,7 @@ def eos_test_exclusive_list(
     results = list()
     tc = TransceiverCheckExclusiveList()
 
-    used_msrd_ports = {
-        int(po_num)
-        for po_num, po_data in msrd_ports.items()
-        if po_data.get("modelName")
-    }
+    used_msrd_ports = set(msrd_ports)
 
     # remove the reserved ports form the used list so that we do not consider
     # them as part of the exclusive list testing.
@@ -211,8 +197,8 @@ def eos_test_exclusive_list(
     return results
 
 
-def eos_test_one_interface(
-    device: Device, check: TransceiverCheck, ifaceinv: dict, ifacehw: dict
+def _check_one_interface(
+    device: Device, check: TransceiverCheck, if_xcvr_status: dict
 ) -> trt.CheckResultsCollection:
     """
     This function validates that a specific interface is using the specific
@@ -224,7 +210,7 @@ def eos_test_one_interface(
     # if there is no entry for this interface, then the transceiver does not
     # exist.
 
-    if not ifaceinv:
+    if not if_xcvr_status:
         results.append(
             trt.CheckFailNoExists(
                 device=device,
@@ -236,7 +222,7 @@ def eos_test_one_interface(
     # if there is no model value, then the transceiver does not exist.
 
     exp_model = check.expected_results.model
-    if not (msrd_model := ifaceinv["modelName"]):
+    if not (msrd_model := if_xcvr_status.get("partnum")):
         results.append(
             trt.CheckFailNoExists(
                 device=device,
@@ -255,8 +241,10 @@ def eos_test_one_interface(
             )
         )
 
+    # always upper-case the type value for more consistent validation checking.
+
     expd_type = check.expected_results.type
-    msrd_type = ifacehw["transceiverType"]
+    msrd_type = if_xcvr_status["type"].upper()
     if not transceiver_type_matches(expected_type=expd_type, given_type=msrd_type):
         results.append(
             trt.CheckFailFieldMismatch(

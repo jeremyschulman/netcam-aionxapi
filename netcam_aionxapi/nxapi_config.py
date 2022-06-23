@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, Extra, ValidationError
 # Exports
 # -----------------------------------------------------------------------------
 
-__all__ = ["init_config", "g_eos"]
+__all__ = ["init_config", "g_nxapi"]
 
 # -----------------------------------------------------------------------------
 #
@@ -46,17 +46,17 @@ DEFAULT_ENV_PASSWORD = "NETWORK_PASSWORD"
 # -----------------------------------------------------------------------------
 
 
-class EosGlobals:
+class NXAPIGlobals:
     """
     Define a class to encapsulate the global variables used by this plugin.
 
     Attributes
     ----------
     basic_auth: httpx.BasicAuth
-        The authorization value that will be used to access the EOS devices via
-        eAPI. This username-password auth combination is prepared once during
-        initialization so that we do not need to duplicate the calls for each
-        DUT.  Note that this approach does (currently) preclude the use of
+        The authorization value that will be used to access the NX-OS devices
+        via NXAPI. This username-password auth combination is prepared once
+        during initialization so that we do not need to duplicate the calls for
+        each DUT.  Note that this approach does (currently) preclude the use of
         per-device authorizations.  TODO: feature.
 
     config: dict
@@ -70,11 +70,11 @@ class EosGlobals:
         invocation.
         """
         self.basic_auth: Optional[httpx.BasicAuth] = None
-        self.config: Optional[EosConfig] = None
+        self.config: Optional[NXAPIConfig] = None
 
 
 # the global variables used by this plugin
-g_eos = EosGlobals()
+g_nxapi = NXAPIGlobals()
 
 
 # -----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ g_eos = EosGlobals()
 # -----------------------------------------------------------------------------
 
 
-class EosEnvConfig(BaseModel, extra=Extra.forbid):
+class NXAPIEnvConfig(BaseModel, extra=Extra.forbid):
     """
     Define the environment variable names to source the username and password values.  When
     provided, these will override the default values.
@@ -94,16 +94,16 @@ class EosEnvConfig(BaseModel, extra=Extra.forbid):
     password: str = Field(default=DEFAULT_ENV_PASSWORD)
 
 
-class EosConfig(BaseModel, extra=Extra.forbid):
+class NXAPIConfig(BaseModel, extra=Extra.forbid):
     """define the schema for the plugin configuration"""
 
-    env: EosEnvConfig
+    env: NXAPIEnvConfig
 
 
 def init_config(config: dict):
     """
-    Called during plugin init, this function is used to setup the default
-    credentials to access the EOS devices.
+    Called during plugin init, this function is used to set up the default
+    credentials to access the NXAPI devices.
 
     Parameters
     ----------
@@ -112,14 +112,14 @@ def init_config(config: dict):
     """
 
     try:
-        g_eos.config = EosConfig.parse_obj(config)
+        g_nxapi.config = NXAPIConfig.parse_obj(config)
     except ValidationError as exc:
         raise RuntimeError(f"invalid plugin configuration: {str(exc)}")
 
     try:
-        g_eos.basic_auth = httpx.BasicAuth(
-            username=environ[g_eos.config.env.username],
-            password=environ[g_eos.config.env.password],
+        g_nxapi.basic_auth = httpx.BasicAuth(
+            username=environ[g_nxapi.config.env.username],
+            password=environ[g_nxapi.config.env.password],
         )
     except KeyError as exc:
         raise RuntimeError(f"Missing environment variable: {exc.args[0]}")
