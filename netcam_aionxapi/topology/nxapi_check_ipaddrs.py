@@ -17,11 +17,13 @@
 # System Imports
 # -----------------------------------------------------------------------------
 
-from typing import Generator, Sequence
+from typing import Generator, Sequence, Dict
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
+
+from lxml.etree import ElementBase
 
 from netcad.topology.checks.check_ipaddrs import (
     IPInterfacesCheckCollection,
@@ -65,17 +67,16 @@ async def nxapi_test_ipaddrs(
 
     dut: NXAPIDeviceUnderTest = self
     device = dut.device
-    cli_rsp = await dut.nxapi.cli("show ip interface vrf all")
+    e_dev_data = await dut.nxapi.cli("show ip interface vrf all", ofmt="xml")
 
     # create an IP interface map using the interface-name as the key.  The
     # interface name is not always cased correctly, for example "Loopback0" is
     # reported as "loopback0". so title the value when storing the key.
 
-    map_ip_ifaces = {}
-    for entry in cli_rsp["TABLE_intf"]:
-        row_intf = entry["ROW_intf"]
-        intf_name: str = row_intf["intf-name"]
-        map_ip_ifaces[intf_name.title()] = row_intf
+    map_ip_ifaces: Dict[str, ElementBase] = {}
+    for e_row_intf in e_dev_data.xpath("TABLE_intf/ROW_intf"):
+        intf_name: str = e_row_intf.findtext("intf-name")
+        map_ip_ifaces[intf_name.title()] = e_row_intf
 
     results = list()
     if_names = list()
@@ -84,14 +85,14 @@ async def nxapi_test_ipaddrs(
         if_name = check.check_id()
         if_names.append(if_name)
 
-        if not (if_ip_data := map_ip_ifaces.get(if_name)):
+        if (e_if_ip_data := map_ip_ifaces.get(if_name)) is None:
             results.append(
                 trt.CheckFailNoExists(device=device, check=check, field="if_ipaddr")
             )
             continue
 
         one_results = await _check_one_interface(
-            dut, device=device, check=check, msrd_data=if_ip_data
+            dut, device=device, check=check, msrd_data=e_if_ip_data
         )
 
         results.extend(one_results)
@@ -124,7 +125,7 @@ async def _check_one_interface(
     dut: NXAPIDeviceUnderTest,
     device: Device,
     check: IPInterfaceCheck,
-    msrd_data: dict,
+    msrd_data: ElementBase,
 ) -> trt.CheckResultsCollection:
     """
     This function validates a specific interface use of an IP address against
@@ -136,25 +137,8 @@ async def _check_one_interface(
 
     if_name = check.check_id()
 
-    # -------------------------------------------------------------------------
-    # if there is any error accessing the expected interface IP address
-    # information, then yeild a failure and return.
-    # -------------------------------------------------------------------------
-
-    try:
-        msrd_if_addr = msrd_data["prefix"]
-        msrd_if_ipaddr = f"{msrd_if_addr}/{msrd_data['masklen']}"
-
-    except KeyError:
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=device,
-                check=check,
-                field="measurement",
-                measurement=msrd_data,
-            )
-        )
-        return results
+    msrd_if_addr = msrd_data.findtext("prefix")
+    msrd_if_ipaddr = f"{msrd_if_addr}/{msrd_data.findtext('masklen')}"
 
     # -------------------------------------------------------------------------
     # Ensure the IP interface value matches.
@@ -198,7 +182,9 @@ async def _check_one_interface(
     dut_iface = dut_interfaces[if_name]
     iface_enabled = dut_iface["enabled"] is True
 
-    if iface_enabled and (if_oper := msrd_data["proto-state"]) != "up":
+    has_if_oper = msrd_data.findtext("proto-state")
+
+    if iface_enabled and (has_if_oper != "up"):
 
         # if the interface is an SVI, then we need to check to see if _all_ of
         # the associated physical interfaces are either disabled or in a
@@ -207,7 +193,7 @@ async def _check_one_interface(
         if if_name.startswith("Vlan"):
 
             svi_res = await _check_vlan_assoc_interface(
-                dut, check, if_name=if_name, msrd_ipifaddr_oper=if_oper
+                dut, check, if_name=if_name, msrd_ipifaddr_oper=has_if_oper
             )
             results.extend(svi_res)
 
@@ -218,14 +204,18 @@ async def _check_one_interface(
                     check=check,
                     field="if_oper",
                     expected="up",
-                    measurement=if_oper,
-                    error=f"IP exists {expd_if_ipaddr}, interface is not up: {if_oper}",
+                    measurement=has_if_oper,
+                    error=f"IP exists {expd_if_ipaddr}, interface is not up: {has_if_oper}",
                 )
             )
 
     if not any_failures(results):
         results.append(
-            trt.CheckPassResult(device=device, check=check, measurement=msrd_data)
+            trt.CheckPassResult(
+                device=device,
+                check=check,
+                measurement=dict(if_ipaddr=msrd_if_ipaddr, if_oper=has_if_oper),
+            )
         )
 
     return results
@@ -261,10 +251,13 @@ def _test_exclusive_list(
 
 
 async def _check_vlan_assoc_interface(
-    dut: NXAPIDeviceUnderTest, check, if_name: str, msrd_ipifaddr_oper
+    dut: NXAPIDeviceUnderTest,
+    check: IPInterfaceCheck,
+    if_name: str,
+    msrd_ipifaddr_oper: str,
 ) -> trt.CheckResultsCollection:
     """
-    This functions is used to check whether a VLAN SVI ip address is not "up"
+    This function is used to check whether a VLAN SVI ip address is not "up"
     due to the fact that the underlying interfaces are either disabled or in a
     "reserved" design; meaning we do not care if they are up or down. If the
     SVI is down because of this condition, the test case will "pass", and an

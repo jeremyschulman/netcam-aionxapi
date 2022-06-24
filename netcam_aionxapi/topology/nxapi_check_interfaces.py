@@ -18,13 +18,15 @@
 # -----------------------------------------------------------------------------
 
 import re
-from typing import Set, List, Iterable
+from typing import Set, List, Iterable, Dict
 from itertools import chain
+from operator import attrgetter
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
 
+from lxml.etree import ElementBase
 from pydantic import BaseModel
 
 from netcad.device import Device, DeviceInterface
@@ -61,22 +63,17 @@ _match_svi = re.compile(r"Vlan(\d+)").match
 
 
 @NXAPIDeviceUnderTest.execute_checks.register
-async def eos_check_interfaces(
-    self, collection: InterfaceCheckCollection
+async def nxapi_check_interfaces(
+    dut, collection: InterfaceCheckCollection
 ) -> tr.CheckResultsCollection:
     """
     This async generator is responsible for implementing the "interfaces" test
-    cases for EOS devices.
-
-    Notes
-    ------
-    This function is **IMPORTED** directly into the DUT class so that these
-    testcase files can be separated.
+    cases for NX-OS NXAPI devices.
 
     Parameters
     ----------
-    self: <!LEAVE UNHINTED!>
-        The DUT instance for the EOS device
+    dut: <!LEAVE UNHINTED!>
+        The DUT instance for the device
 
     collection: InterfaceCheckCollection
         The testcases instance that contains the specific testing details.
@@ -86,34 +83,36 @@ async def eos_check_interfaces(
     TestCasePass, TestCaseFailed
     """
 
-    dut: NXAPIDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest
     device = dut.device
     results = list()
 
-    # read the data from the EOS device for both "show interfaces ..." and "show
-    # vlan ..." since we need both.
-
-    cli_sh_ifaces, cli_sh_vlan, cli_sh_ipinf = await dut.nxapi.cli(
+    e_sh_ifaces, e_sh_vlan, e_sh_ipinf = await dut.nxapi.cli(
         commands=[
             "show interface status",
             "show vlan brief",
             "show ip interface brief vrf all",
-        ]
+        ],
+        ofmt="xml",
     )
 
     # -------------------------------------------------------------------------
     # create an interface map by interface-name
     # -------------------------------------------------------------------------
 
-    dev_ifoper_list = cli_sh_ifaces["TABLE_interface"]["ROW_interface"]
-    map_if_oper_data = {iface["interface"]: iface for iface in dev_ifoper_list}
+    map_if_oper_data = {
+        e_iface.findtext("interface"): e_iface
+        for e_iface in e_sh_ifaces.xpath("TABLE_interface/ROW_interface")
+    }
 
     # -------------------------------------------------------------------------
     # create an VLAN map by VLAN-ID (as string)
     # -------------------------------------------------------------------------
 
-    dev_vlan_list = cli_sh_vlan["TABLE_vlanbriefxbrief"]["ROW_vlanbriefxbrief"]
-    map_svi_oper_data = {vlan["vlanshowbr-vlanid"]: vlan for vlan in dev_vlan_list}
+    map_svi_oper_data = {
+        e_vlan.findtext("vlanshowbr-vlanid"): e_vlan
+        for e_vlan in e_sh_vlan.xpath("TABLE_vlanbriefxbrief/ROW_vlanbriefxbrief")
+    }
 
     # -------------------------------------------------------------------------
     # create an IP interface map by interface-name.  These naems are
@@ -121,11 +120,10 @@ async def eos_check_interfaces(
     # -------------------------------------------------------------------------
 
     map_ip_ifaces = {}
-    for entry in cli_sh_ipinf["TABLE_intf"]:
-        row_intf = entry["ROW_intf"]
-        intf_name = row_intf["intf-name"]
+    for e_intf in e_sh_ipinf.xpath("TABLE_intf/ROW_intf"):
+        intf_name = e_intf.findtext("intf-name")
         intf_name = dut.expand_inteface_name(intf_name)
-        map_ip_ifaces[intf_name] = row_intf
+        map_ip_ifaces[intf_name] = e_intf
 
     # -------------------------------------------------------------------------
     # Check for the exclusive set of interfaces expected vs actual.
@@ -155,9 +153,9 @@ async def eos_check_interfaces(
 def _check_each_interface(
     device: Device,
     checks: List[InterfaceCheck],
-    dev_svi_data: dict,
-    dev_ip_data: dict,
-    dev_ifoper_data: dict,
+    dev_svi_data: Dict[str, ElementBase],
+    dev_ip_data: Dict[str, ElementBase],
+    dev_ifoper_data: Dict[str, ElementBase],
     results: tr.CheckResultsCollection,
 ):
     # -------------------------------------------------------------------------
@@ -186,7 +184,7 @@ def _check_each_interface(
             # If the VLAN does not exist then the "interface Vlan<N>" does not
             # exist on the device.
 
-            if not svi_oper_status:
+            if svi_oper_status is None:
                 results.append(tr.CheckFailNoExists(device=device, check=check))
                 continue
 
@@ -204,7 +202,7 @@ def _check_each_interface(
         # ---------------------------------------------------------------------
 
         if if_name.startswith("Loopback"):
-            if not (lo_status := dev_ip_data.get(if_name)):
+            if (lo_status := dev_ip_data.get(if_name)) is None:
                 results.append(tr.CheckFailNoExists(device=device, check=check))
                 continue
 
@@ -223,7 +221,7 @@ def _check_each_interface(
         # fails, and we go onto the next text.
         # ---------------------------------------------------------------------
 
-        if not (iface_oper_status := dev_ifoper_data.get(if_name)):
+        if (iface_oper_status := dev_ifoper_data.get(if_name)) is None:
             results.append(tr.CheckFailNoExists(device=device, check=check))
 
         results.extend(
@@ -324,18 +322,20 @@ class NXAPIInterfaceMeasurement(BaseModel):
     _MAP_SPEED = {"1000": 1_000, "10G": 10_000, "40G": 40_000, "100G": 100_000}
 
     @classmethod
-    def from_cli(cls, cli_payload: dict):
+    def from_cli(cls, cli_payload: ElementBase):
         """returns an EOS specific measurement mapping the CLI object fields"""
         return cls(
-            used=cli_payload["state"] != "disabled",
-            oper_up=cli_payload["state"] == "connected",
-            desc=cli_payload["name"],
-            speed=NXAPIInterfaceMeasurement._MAP_SPEED.get(cli_payload["speed"], 0),
+            used=cli_payload.findtext("state") != "disabled",
+            oper_up=cli_payload.findtext("state") == "connected",
+            desc=cli_payload.findtext("name") or "",
+            speed=NXAPIInterfaceMeasurement._MAP_SPEED.get(
+                cli_payload.findtext("speed"), 0
+            ),
         )
 
 
 def _check_one_interface(
-    device: Device, check: InterfaceCheck, iface_oper_status: dict
+    device: Device, check: InterfaceCheck, iface_oper_status: ElementBase
 ) -> tr.CheckResultsCollection:
     """
     Validates a specific physical interface against the expectations in the
@@ -433,20 +433,26 @@ def _check_one_interface(
 
 
 def _check_one_loopback(
-    device: Device, check: InterfaceCheck, ifip_oper_status: dict
+    device: Device, check: InterfaceCheck, ifip_oper_status: ElementBase
 ) -> tr.CheckResultsCollection:
     """
     If the loopback interface exists (previous checked), then no other field
     checks are performed.  Yield this as a passing test-case and record the
     measured values from the device.
     """
+
+    key_val = attrgetter("tag", "text")
     return [
-        tr.CheckPassResult(device=device, check=check, measurement=ifip_oper_status)
+        tr.CheckPassResult(
+            device=device,
+            check=check,
+            measurement=dict(map(key_val, ifip_oper_status.iterchildren())),
+        )
     ]
 
 
 def _check_one_svi(
-    device: Device, check: InterfaceCheck, svi_oper_status: dict
+    device: Device, check: InterfaceCheck, svi_oper_status: ElementBase
 ) -> tr.CheckResultsCollection:
     """
     Checks the device state for a VLAN interface against the expected values in
@@ -459,7 +465,7 @@ def _check_one_svi(
     # description field.
     # -------------------------------------------------------------------------
 
-    msrd_desc = svi_oper_status["vlanshowbr-vlanname"]
+    msrd_desc = svi_oper_status.findtext("vlanshowbr-vlanname")
     expd_desc = check.expected_results.desc
 
     if msrd_desc != expd_desc:
@@ -474,7 +480,7 @@ def _check_one_svi(
     # / disabled value.
     # -------------------------------------------------------------------------
 
-    msrd_status = svi_oper_status["vlanshowbr-vlanstate"]
+    msrd_status = svi_oper_status.findtext("vlanshowbr-vlanstate")
     expd_status = check.expected_results.oper_up
 
     if expd_status != (msrd_status == "active"):
