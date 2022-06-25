@@ -26,7 +26,7 @@ from typing import Set, Dict
 from netcad.topology.checks.check_transceivers import (
     TransceiverCheckCollection,
     TransceiverCheck,
-    TransceiverCheckExclusiveList,
+    TransceiverExclusiveListCheck,
 )
 from netcad.topology import transceiver_model_matches, transceiver_type_matches
 
@@ -154,7 +154,7 @@ def _check_exclusive_list(
     """
 
     results = list()
-    tc = TransceiverCheckExclusiveList()
+    tc = TransceiverExclusiveListCheck()
 
     used_msrd_ports = set(msrd_ports)
 
@@ -189,7 +189,7 @@ def _check_exclusive_list(
         results.append(
             trt.CheckPassResult(
                 device=device,
-                check=TransceiverCheckExclusiveList(),
+                check=TransceiverExclusiveListCheck(),
                 measurement="OK: no extra or missing transceivers",
             )
         )
