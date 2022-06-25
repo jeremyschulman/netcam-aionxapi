@@ -34,7 +34,7 @@ from netcad.netcam import any_failures
 from netcad.checks import check_result_types as tr
 
 from netcad.topology.checks.check_interfaces import (
-    InterfaceCheckExclusiveList,
+    InterfaceExclusiveListCheck,
     InterfacesListExpected,
     InterfaceCheckCollection,
     InterfaceCheck,
@@ -260,7 +260,7 @@ def _check_exclusive_interfaces_list(
     against the expected list in the design.
     """
 
-    tc = InterfaceCheckExclusiveList(
+    tc = InterfaceExclusiveListCheck(
         expected_results=InterfacesListExpected(if_name_list=list(expd_interfaces))
     )
 
