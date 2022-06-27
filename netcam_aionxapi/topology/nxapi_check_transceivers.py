@@ -222,7 +222,10 @@ def _check_one_interface(
     # if there is no model value, then the transceiver does not exist.
 
     exp_model = check.expected_results.model
-    if not (msrd_model := if_xcvr_status.get("partnum")):
+    # msrd_model = if_xcvr_status.get("partnum")
+    msrd_model = if_xcvr_status.get("cisco_product_id")
+
+    if not msrd_model:
         results.append(
             trt.CheckFailNoExists(
                 device=device,
