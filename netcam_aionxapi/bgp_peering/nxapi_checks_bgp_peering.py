@@ -7,6 +7,7 @@ from lxml.etree import ElementBase as Element
 from netcad.bgp_peering.checks import (
     BgpNeighborsCheckCollection,
     BgpNeighborCheck,
+    BgpNeighborCheckResult,
 )
 
 from netcad.checks import check_result_types as trt
@@ -62,7 +63,7 @@ def _check_bgp_neighbor(
     check: BgpNeighborCheck,
     bgp_spkr: Element,
     results: trt.CheckResultsCollection,
-) -> bool:
+):
     """
     This function checks one BGP neighbor.  A check is considered to pass if and
     only if:
@@ -93,10 +94,9 @@ def _check_bgp_neighbor(
     -------
     True if the check passes, False otherwise.
     """
-    check_pass = True
+    result = BgpNeighborCheckResult(device=dut.device, check=check)
 
     params = check.check_params
-    expected = check.expected_results
 
     # if the neighbor for the expected remote IP does not exist, then record
     # that result, and we are done checking this neighbor.
@@ -106,42 +106,17 @@ def _check_bgp_neighbor(
             f'TABLE_neighbor/ROW_neighbor[neighbor-id = "{params.nei_ip}"]'
         )
     ):
-        results.append(trt.CheckFailNoExists(device=dut.device, check=check))
-        return False
+        result.measurement = None
+        results.append(result.finalize())
+        return
 
+    # collect measurements
+
+    msrd = result.measurement
     nei_data: Element = found[0]
 
-    # next check for peer ASN matching.
+    # device stores ASN as string-int
+    msrd.remote_asn = int(nei_data.findtext("remoteas"))
+    msrd.state = MAP_BGP_STATES[nei_data.findtext("state")]
 
-    if (remote_asn := int(nei_data.findtext("remoteas"))) != expected.remote_asn:
-        check_pass = False
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=dut.device, check=check, field="asn", measurement=remote_asn
-            )
-        )
-
-    # check for matching expected BGP state
-
-    peer_state = MAP_BGP_STATES[nei_data.findtext("state")]
-
-    if peer_state != expected.state:
-        check_pass = False
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=dut.device, check=check, field="state", measurement=peer_state
-            )
-        )
-
-    if not check_pass:
-        return False
-
-    results.append(
-        trt.CheckPassResult(
-            device=dut.device,
-            check=check,
-            measurement=check.check_params.dict(),
-        )
-    )
-
-    return True
+    results.append(result.finalize())
