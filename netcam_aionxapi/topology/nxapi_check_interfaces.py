@@ -270,7 +270,7 @@ def _check_exclusive_interfaces_list(
         device=device, check=check, measurement=sorted(msrd_interfaces, key=sort_key)
     )
 
-    results.append(result.finalize(sort_key=sort_key))
+    results.append(result.measure(sort_key=sort_key))
 
 
 # -----------------------------------------------------------------------------
@@ -319,7 +319,7 @@ def _check_one_interface(
 
     if iface_oper_status is None:
         result.measurement = None
-        results.append(result.finalize())
+        results.append(result.measure())
         return
 
     # transform the CLI data into a measurment instance for consistent
@@ -354,7 +354,7 @@ def _check_one_interface(
     result.measurement.used = measurement.used
 
     if not check.expected_results.used:
-        results.append(result.finalize())
+        results.append(result.measure())
         return
 
     # If here, then we want to check all the opeational fields.
@@ -378,7 +378,7 @@ def _check_one_interface(
         if _field == "speed" and measurement.oper_up is False:
             return tr.CheckStatus.SKIP
 
-    results.append(result.finalize(on_mismatch=on_mismatch))
+    results.append(result.measure(on_mismatch=on_mismatch))
     return
 
 

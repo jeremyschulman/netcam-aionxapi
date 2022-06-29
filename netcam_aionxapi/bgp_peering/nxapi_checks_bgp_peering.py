@@ -107,7 +107,7 @@ def _check_bgp_neighbor(
         )
     ):
         result.measurement = None
-        results.append(result.finalize())
+        results.append(result.measure())
         return
 
     # collect measurements
@@ -119,4 +119,4 @@ def _check_bgp_neighbor(
     msrd.remote_asn = int(nei_data.findtext("remoteas"))
     msrd.state = MAP_BGP_STATES[nei_data.findtext("state")]
 
-    results.append(result.finalize())
+    results.append(result.measure())
