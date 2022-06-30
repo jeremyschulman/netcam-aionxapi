@@ -19,16 +19,14 @@
 
 from netcad.topology.checks.check_cabling_nei import (
     InterfaceCablingCheckCollection,
-    InterfaceCablingCheck,
+    InterfaceCablingCheckResult,
 )
 from netcad.topology.checks.utils_cabling_nei import (
     nei_interface_match,
     nei_hostname_match,
 )
 
-from netcad.device import Device
-from netcad.netcam import any_failures
-from netcad.checks import check_result_types as trt
+from netcad.checks import CheckResultsCollection, CheckStatus
 
 # -----------------------------------------------------------------------------
 # Private Imports
@@ -52,8 +50,8 @@ __all__ = []
 
 @NXAPIDeviceUnderTest.execute_checks.register
 async def nxapi_test_cabling(
-    self, testcases: InterfaceCablingCheckCollection
-) -> trt.CheckResultsCollection:
+    dut, testcases: InterfaceCablingCheckCollection
+) -> CheckResultsCollection:
     """
     Support the "cabling" tests for Arista EOS devices.  These tests are
     implementeding by examing the LLDP neighborship status.
@@ -62,9 +60,7 @@ async def nxapi_test_cabling(
 
     Parameters
     ----------
-    self: ** DO NOT TYPE HINT **
-        EOS DUT instance
-
+    dut: ** DO NOT TYPE HINT **
     testcases:
         The device specific cabling testcases as build via netcad.
 
@@ -72,7 +68,7 @@ async def nxapi_test_cabling(
     ------
     Netcad test-case items.
     """
-    dut: NXAPIDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest
     device = dut.device
     results = list()
 
@@ -87,59 +83,42 @@ async def nxapi_test_cabling(
 
     for check in testcases.checks:
         if_name = check.check_id()
-
+        result = InterfaceCablingCheckResult(device=device, check=check)
         if not (port_nei := dev_lldpnei_ifname.get(if_name)):
-            results.append(trt.CheckFailNoExists(device=device, check=check))
+            result.measurement = None
+            results.append(result.measure())
             continue
 
-        results.extend(
-            _test_one_interface(
-                device=dut.device,
-                check=check,
-                ifnei_status=port_nei,
-            )
-        )
+        _test_one_interface(result=result, ifnei_status=port_nei, results=results)
 
     return results
 
 
 def _test_one_interface(
-    device: Device, check: InterfaceCablingCheck, ifnei_status: dict
-) -> trt.CheckResultsCollection:
+    result: InterfaceCablingCheckResult,
+    ifnei_status: dict,
+    results: CheckResultsCollection,
+):
     """
     Validates the LLDP information for a specific interface.
     """
-    results = list()
+    # expd_name = check.expected_results.device
+    # expd_port_id = check.expected_results.port_id
 
-    expd_name = check.expected_results.device
-    expd_port_id = check.expected_results.port_id
+    msrd = result.measurement
+    msrd.device = ifnei_status["chassis_id"]
+    msrd.port_id = ifnei_status["port_id"]
 
-    msrd_name = ifnei_status["chassis_id"]
-    msrd_port_id = ifnei_status["port_id"]
+    def on_mismatch(_field, _expd, _msrd):
+        is_ok = False
+        match _field:
+            case "device":
+                is_ok = nei_hostname_match(_expd, _msrd)
+            case "port_id":
+                is_ok = nei_interface_match(_expd, _msrd)
 
-    if not nei_hostname_match(expd_name, msrd_name):
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=device,
-                check=check,
-                field="device",
-                measurement=msrd_name,
-            )
-        )
+        return CheckStatus.PASS if is_ok else CheckStatus.FAIL
 
-    if not nei_interface_match(expd_port_id, msrd_port_id):
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=device,
-                check=check,
-                field="port_id",
-                measurement=msrd_port_id,
-            )
-        )
-
-    if not any_failures(results):
-        results.append(
-            trt.CheckPassResult(device=device, check=check, measurement=ifnei_status)
-        )
+    results.append(result.measure(on_mismatch=on_mismatch))
 
     return results
