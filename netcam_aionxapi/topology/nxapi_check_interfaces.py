@@ -29,8 +29,7 @@ from operator import attrgetter
 from lxml.etree import ElementBase
 
 from netcad.device import Device, DeviceInterface
-from netcad.netcam import any_failures
-from netcad.checks import check_result_types as tr
+from netcad.checks import CheckResultsCollection, CheckStatus
 
 from netcad.topology.checks.check_interfaces import (
     InterfaceExclusiveListCheck,
@@ -66,7 +65,7 @@ _match_svi = re.compile(r"Vlan(\d+)").match
 @NXAPIDeviceUnderTest.execute_checks.register
 async def nxapi_check_interfaces(
     dut, collection: InterfaceCheckCollection
-) -> tr.CheckResultsCollection:
+) -> CheckResultsCollection:
     """
     This async generator is responsible for implementing the "interfaces" test
     cases for NX-OS NXAPI devices.
@@ -156,14 +155,14 @@ def _check_each_interface(
     dev_svi_data: Dict[str, ElementBase],
     dev_ip_data: Dict[str, ElementBase],
     dev_ifoper_data: Dict[str, ElementBase],
-    results: tr.CheckResultsCollection,
+    results: CheckResultsCollection,
 ):
     # -------------------------------------------------------------------------
     # Check each interface for health checks
     # -------------------------------------------------------------------------
 
     for check in checks:
-
+        result = InterfaceCheckResult(device=device, check=check)
         if_name = check.check_id()
 
         # ---------------------------------------------------------------------
@@ -185,13 +184,12 @@ def _check_each_interface(
             # exist on the device.
 
             if svi_oper_status is None:
-                results.append(tr.CheckFailNoExists(device=device, check=check))
+                result.measurement = None
+                results.append(result.measure())
                 continue
 
-            results.extend(
-                _check_one_svi(
-                    device=device, check=check, svi_oper_status=svi_oper_status
-                )
+            _check_one_svi(
+                svi_oper_status=svi_oper_status, result=result, results=results
             )
 
             # done with Vlan interface, go to next test-case
@@ -202,17 +200,11 @@ def _check_each_interface(
         # ---------------------------------------------------------------------
 
         if if_name.startswith("Loopback"):
-            if (lo_status := dev_ip_data.get(if_name)) is None:
-                results.append(tr.CheckFailNoExists(device=device, check=check))
-                continue
-
-            results.extend(
-                _check_one_loopback(
-                    device=device, check=check, ifip_oper_status=lo_status
-                )
+            _check_one_loopback(
+                result=result,
+                ifip_oper_status=dev_ip_data.get(if_name),
+                results=results,
             )
-
-            # done with Loopback, go to next test-case
             continue
 
         # ---------------------------------------------------------------------
@@ -222,8 +214,7 @@ def _check_each_interface(
         # ---------------------------------------------------------------------
 
         _check_one_interface(
-            device=device,
-            check=check,
+            result=result,
             iface_oper_status=dev_ifoper_data.get(if_name),
             results=results,
         )
@@ -252,7 +243,7 @@ def _check_exclusive_interfaces_list(
     device: Device,
     expd_interfaces: Set[str],
     msrd_interfaces: Set[str],
-    results: tr.CheckResultsCollection,
+    results: CheckResultsCollection,
 ):
     """
     This check validates the exclusive list of interfaces found on the device
@@ -305,17 +296,16 @@ class NXAPIInterfaceMeasurement(InterfaceCheckMeasurement):
 
 
 def _check_one_interface(
-    device: Device,
-    check: InterfaceCheck,
+    result: InterfaceCheckResult,
     iface_oper_status: ElementBase,
-    results: tr.CheckResultsCollection,
+    results: CheckResultsCollection,
 ):
     """
     Validates a specific physical interface against the expectations in the
     design.
     """
 
-    result = InterfaceCheckResult(device=device, check=check)
+    check = result.check
 
     if iface_oper_status is None:
         result.measurement = None
@@ -336,15 +326,9 @@ def _check_one_interface(
     # -------------------------------------------------------------------------
 
     if is_reserved:
-        results.append(
-            tr.CheckInfoLog(
-                device=device,
-                check=check,
-                field="is_reserved",
-                measurement=measurement.dict(),
-            )
-        )
-        return results
+        result.logs.INFO("reserved", measurement=measurement.dict())
+        results.append(result)
+        return
 
     # -------------------------------------------------------------------------
     # Check the 'used' status.  Then if the interface is not being used, then no
@@ -361,99 +345,64 @@ def _check_one_interface(
 
     result.measurement = measurement
 
-    def on_mismatch(_field, _expected, _measured) -> tr.CheckStatus:
+    def on_mismatch(_field, _expected, _measured) -> CheckStatus:
         # if the field is description, then it is an INFO, and not a failure.
         if _field == "desc":
-            results.append(
-                tr.CheckInfoLog(
-                    device=device,
-                    check=check,
-                    measurement="desc does not match, should update configs",
-                )
-            )
-            return tr.CheckStatus.INFO
+            result.logs.WARN("desc", dict(expected=_expected, measured=_measured))
+            return CheckStatus.PASS
 
         # if the speed is mismatched because the port is down, then this is not
         # a failure.
         if _field == "speed" and measurement.oper_up is False:
-            return tr.CheckStatus.SKIP
+            return CheckStatus.SKIP
 
     results.append(result.measure(on_mismatch=on_mismatch))
     return
 
 
 def _check_one_loopback(
-    device: Device, check: InterfaceCheck, ifip_oper_status: ElementBase
-) -> tr.CheckResultsCollection:
+    result: InterfaceCheckResult,
+    ifip_oper_status: ElementBase,
+    results: CheckResultsCollection,
+):
     """
     If the loopback interface exists (previous checked), then no other field
     checks are performed.  Yield this as a passing test-case and record the
     measured values from the device.
     """
 
+    if ifip_oper_status is None:
+        result.measurement = None
+        results.append(result.measure())
+        return
+
     key_val = attrgetter("tag", "text")
-    return [
-        tr.CheckPassResult(
-            device=device,
-            check=check,
-            measurement=dict(map(key_val, ifip_oper_status.iterchildren())),
-        )
-    ]
+    st_dict = dict(map(key_val, ifip_oper_status.iterchildren()))
+    result.logs.INFO("status", status=st_dict)
+
+    # no need to .measure() since the existance of a loopback is a PASS.
+    results.append(result)
 
 
 def _check_one_svi(
-    device: Device, check: InterfaceCheck, svi_oper_status: ElementBase
-) -> tr.CheckResultsCollection:
+    result: InterfaceCheckResult,
+    svi_oper_status: ElementBase,
+    results: CheckResultsCollection,
+):
     """
     Checks the device state for a VLAN interface against the expected values in
     the design.
     """
-    results = list()
+
+    msrd = result.measurement
 
     # -------------------------------------------------------------------------
     # check the vlan 'name' field, as that should match the test case
     # description field.
     # -------------------------------------------------------------------------
 
-    msrd_desc = svi_oper_status.findtext("vlanshowbr-vlanname")
-    expd_desc = check.expected_results.desc
-
-    if msrd_desc != expd_desc:
-        results.append(
-            tr.CheckFailFieldMismatch(
-                device=device, check=check, field="desc", measurement=msrd_desc
-            )
-        )
-
-    # -------------------------------------------------------------------------
-    # check the status field to match it to the expected is operational enabled
-    # / disabled value.
-    # -------------------------------------------------------------------------
-
+    msrd.desc = svi_oper_status.findtext("vlanshowbr-vlanname")
     msrd_status = svi_oper_status.findtext("vlanshowbr-vlanstate")
-    expd_status = check.expected_results.oper_up
+    msrd.oper_up = msrd_status == "active"
 
-    if expd_status != (msrd_status == "active"):
-        results.append(
-            tr.CheckFailFieldMismatch(
-                device=device,
-                check=check,
-                field="oper_up",
-                measurement=msrd_status,
-            )
-        )
-
-    # -------------------------------------------------------------------------
-    # All checks passeed !
-    # -------------------------------------------------------------------------
-
-    if not any_failures(results):
-        results.append(
-            tr.CheckPassResult(
-                device=device,
-                check=check,
-                measurement=check.expected_results.dict(),
-            )
-        )
-
-    return results
+    results.append(result.measure())
