@@ -16,12 +16,11 @@
 # Public Impors
 # -----------------------------------------------------------------------------
 
-from netcad.topology.checks.check_device_info import DeviceInformationCheckCollection
-from netcad.checks import (
-    CheckPassResult,
-    CheckFailResult,
-    CheckInfoLog,
-    CheckResultsCollection,
+from netcad.checks import CheckResultsCollection, CheckResult, CheckStatus
+
+from netcad.topology.checks.check_device_info import (
+    DeviceInformationCheckCollection,
+    DeviceInformationCheckResult,
 )
 
 # -----------------------------------------------------------------------------
@@ -61,45 +60,35 @@ async def nxapi_check_device_info(
     # purposes.
 
     check = device_checks.checks[0]
-    exp_values = check.expected_results
+    result = DeviceInformationCheckResult(device=dut.device, check=check)
+    msrd = result.measurement
 
-    exp_product_model = exp_values.product_model
+    # check the product model, but discount any of the "front-back" designation
+
+    exp_product_model = check.expected_results.product_model
+
     dev_hw = await dut.nxapi.cli("show hardware")
     hw_row = dut.dig(dev_hw, "TABLE_slot.ROW_slot.TABLE_slot_info.ROW_slot_info.0")
-    has_model = hw_row["model_num"]
+
+    msrd.product_model = has_model = hw_row["model_num"]
 
     check_len = min(len(has_model), len(exp_product_model))
-    match = has_model[:check_len] == exp_product_model[:check_len]
+    model_match = has_model[:check_len] == exp_product_model[:check_len]
 
-    if match:
-        results.append(
-            CheckPassResult(
-                device=dut.device,
-                check=check,
-                measurement=has_model,
-                field="product_model",
-            )
-        )
-    else:
-        results.append(
-            CheckFailResult(
-                device=dut.device,
-                check=check,
-                measurement=has_model,
-                field="product_model",
-                error=f"Mismatch: product_model, expected {exp_product_model}, actual {has_model}",
-            )
-        )
+    def on_mismatch(_field, _expd, _msrd):
+        return CheckStatus.PASS if model_match else CheckStatus.FAIL
+
+    results.append(result.measure(on_mismatch=on_mismatch))
 
     # include an information block that provides the raw "show version" object content.
 
-    results.append(
-        CheckInfoLog(
-            device=dut.device,
-            check=check,
-            field="version",
-            measurement=ver_info["rr_sys_ver"],
-        )
+    info = CheckResult(
+        device=dut.device,
+        check=check,
+        status=CheckStatus.INFO,
+        measurement=ver_info["rr_sys_ver"],
     )
+
+    results.append(info)
 
     return results

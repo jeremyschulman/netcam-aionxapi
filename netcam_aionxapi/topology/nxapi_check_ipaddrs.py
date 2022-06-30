@@ -28,7 +28,7 @@ from lxml.etree import ElementBase
 from netcad.topology.checks.check_ipaddrs import (
     IPInterfacesCheckCollection,
     IPInterfaceCheck,
-    IPInterfaceCheckExclusiveList,
+    IPInterfaceExclusiveListCheck,
     IPInterfaceList,
 )
 
@@ -232,7 +232,7 @@ def _test_exclusive_list(
     # the previous per-interface checks for any missing; therefore we only need
     # to check for any extra interfaces found on the device.
 
-    tc = IPInterfaceCheckExclusiveList(
+    tc = IPInterfaceExclusiveListCheck(
         expected_results=IPInterfaceList(if_names=list(expd_if_names))
     )
 
