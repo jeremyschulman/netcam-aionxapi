@@ -35,9 +35,8 @@ from lxml.etree import ElementBase
 from aionxapi import Device as DeviceNXAPI
 
 from netcad.device import Device
-from netcad.checks import CheckCollection
+from netcad.checks import CheckCollection, CheckResultsCollection
 from netcad.netcam.dut import AsyncDeviceUnderTest
-from netcad.netcam import CheckResultsCollection
 
 # -----------------------------------------------------------------------------
 # Privae Imports

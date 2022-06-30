@@ -6,7 +6,7 @@ readme = "README.md"
 authors = ["Jeremy Schulman"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.10"
 httpx = "*"
 interrogate = "*"
 aio-nxapi = {path = "../aio-nxapi"}

@@ -10,7 +10,7 @@ from netcad.bgp_peering.checks import (
     BgpNeighborCheckResult,
 )
 
-from netcad.checks import check_result_types as trt
+from netcad.checks import CheckResultsCollection
 
 # -----------------------------------------------------------------------------
 # Private Imports
@@ -29,10 +29,10 @@ from .nxapi_check_bgp_peering_defs import DEFAULT_VRF_NAME, MAP_BGP_STATES
 @NXAPIDeviceUnderTest.execute_checks.register
 async def check_neeighbors(
     self, check_collection: BgpNeighborsCheckCollection
-) -> trt.CheckResultsCollection:
+) -> CheckResultsCollection:
     dut: NXAPIDeviceUnderTest = self
 
-    results: trt.CheckResultsCollection = list()
+    results = list()
     checks = check_collection.checks
 
     dev_data = await dut.api_cache_get(command="show bgp sessions", ofmt="xml")
@@ -62,7 +62,7 @@ def _check_bgp_neighbor(
     dut: NXAPIDeviceUnderTest,
     check: BgpNeighborCheck,
     bgp_spkr: Element,
-    results: trt.CheckResultsCollection,
+    results: CheckResultsCollection,
 ):
     """
     This function checks one BGP neighbor.  A check is considered to pass if and
