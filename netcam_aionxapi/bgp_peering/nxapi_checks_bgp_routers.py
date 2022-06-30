@@ -7,9 +7,10 @@ from lxml.etree import ElementBase
 from netcad.bgp_peering.checks import (
     BgpRoutersCheckCollection,
     BgpRouterCheck,
+    BgpRouterCheckResult,
 )
 
-from netcad.checks import check_result_types as trt
+from netcad.checks import CheckResultsCollection
 
 # -----------------------------------------------------------------------------
 # Private Imports
@@ -28,7 +29,7 @@ from .nxapi_check_bgp_peering_defs import DEFAULT_VRF_NAME
 @NXAPIDeviceUnderTest.execute_checks.register
 async def check_bgp_neighbors(
     self, check_bgp_routers: BgpRoutersCheckCollection
-) -> trt.CheckResultsCollection:
+) -> CheckResultsCollection:
     """
     This function is responsible for validating the EOS device IP BGP neighbors
     are operationally correct.
@@ -45,7 +46,7 @@ async def check_bgp_neighbors(
     -------
     trt.CheckResultsCollection - The results of the checks
     """
-    results: trt.CheckResultsCollection = list()
+    results = list()
     checks = check_bgp_routers.checks
     dut: NXAPIDeviceUnderTest = self
 
@@ -68,8 +69,8 @@ def _check_router_vrf(
     dut: NXAPIDeviceUnderTest,
     check: BgpRouterCheck,
     dev_data: ElementBase,
-    results: trt.CheckResultsCollection,
-) -> bool:
+    results: CheckResultsCollection,
+):
 
     check_vrf = check.check_params.vrf or DEFAULT_VRF_NAME
 
@@ -77,36 +78,13 @@ def _check_router_vrf(
         f'TABLE_vrf/ROW_vrf[vrf-name-out = "{check_vrf}"]'
     )[0]
 
-    expected = check.expected_results
-    check_pass = True
+    result = BgpRouterCheckResult(device=dut.device, check=check)
+    msrd = result.measurement
 
     # from the device, routerId is a string
-
-    if (rtr_id := e_bgp_spkr.findtext("router-id", default="")) != expected.router_id:
-        results.append(
-            trt.CheckFailFieldMismatch(
-                check=check, device=dut.device, field="router_id", measurement=rtr_id
-            )
-        )
-        check_pass = False
+    msrd.router_id = e_bgp_spkr.findtext("router-id", default="")
 
     # from the device, asn is a string-int
+    msrd.asn = int(e_bgp_spkr.findtext("local-as", default="0"))
 
-    if (rtr_asn := int(e_bgp_spkr.findtext("local-as", default="0"))) != expected.asn:
-        results.append(
-            trt.CheckFailFieldMismatch(
-                check=check, device=dut.device, field="asn", measurement=rtr_asn
-            )
-        )
-        check_pass = False
-
-    if check_pass:
-        results.append(
-            trt.CheckPassResult(
-                device=dut.device,
-                check=check,
-                measurement=dict(routerId=rtr_id, asn=rtr_asn),
-            )
-        )
-
-    return check_pass
+    results.append(result.measure())
