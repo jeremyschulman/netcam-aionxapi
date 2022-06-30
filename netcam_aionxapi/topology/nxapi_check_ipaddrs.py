@@ -17,7 +17,7 @@
 # System Imports
 # -----------------------------------------------------------------------------
 
-from typing import Generator, Sequence, Dict
+from typing import Sequence, Dict
 
 # -----------------------------------------------------------------------------
 # Public Imports
@@ -27,14 +27,13 @@ from lxml.etree import ElementBase
 
 from netcad.topology.checks.check_ipaddrs import (
     IPInterfacesCheckCollection,
-    IPInterfaceCheck,
+    IPInterfaceCheckResult,
     IPInterfaceExclusiveListCheck,
-    IPInterfaceList,
+    IPInterfaceExclusiveListCheckResult,
 )
 
-from netcad.device import Device
-from netcad.netcam import any_failures
-from netcad.checks import check_result_types as trt
+from netcad.device import Device, DeviceInterface
+from netcad.checks import CheckResultsCollection
 
 # -----------------------------------------------------------------------------
 # Private Imports
@@ -58,14 +57,14 @@ __all__ = []
 
 @NXAPIDeviceUnderTest.execute_checks.register
 async def nxapi_test_ipaddrs(
-    self, collection: IPInterfacesCheckCollection
-) -> trt.CheckResultsCollection:
+    dut, collection: IPInterfacesCheckCollection
+) -> CheckResultsCollection:
     """
     This check executor validates the IP addresses used on the device against
     those that are defined in the design.
     """
 
-    dut: NXAPIDeviceUnderTest = self
+    dut: NXAPIDeviceUnderTest
     device = dut.device
     e_dev_data = await dut.nxapi.cli("show ip interface vrf all", ofmt="xml")
 
@@ -82,39 +81,21 @@ async def nxapi_test_ipaddrs(
     if_names = list()
 
     for check in collection.checks:
+        result = IPInterfaceCheckResult(device=device, check=check)
+
         if_name = check.check_id()
         if_names.append(if_name)
 
         if (e_if_ip_data := map_ip_ifaces.get(if_name)) is None:
-            results.append(
-                trt.CheckFailNoExists(device=device, check=check, field="if_ipaddr")
-            )
+            result.measurement = None
+            results.append(result.measure())
             continue
 
-        one_results = await _check_one_interface(
-            dut, device=device, check=check, msrd_data=e_if_ip_data
+        await _check_one_interface(
+            dut=dut, result=result, msrd_data=e_if_ip_data, results=results
         )
 
-        results.extend(one_results)
-
-    # only include device interface that have an assigned IP address; this
-    # conditional is checked by examining the interface IP address mask length
-    # against zero.
-
-    # TODO:
-    # if collection.exclusive:
-    #     results.extend(
-    #         eos_test_exclusive_list(
-    #             device=device,
-    #             expd_if_names=if_names,
-    #             msrd_if_names=[
-    #                 if_ip_data["name"]
-    #                 for if_ip_data in dev_ips_data.values()
-    #                 if if_ip_data["interfaceAddress"]["ipAddr"]["maskLen"] != 0
-    #             ],
-    #         )
-    #     )
-
+    # TODO: implement the exclusive check
     return results
 
 
@@ -123,51 +104,32 @@ async def nxapi_test_ipaddrs(
 
 async def _check_one_interface(
     dut: NXAPIDeviceUnderTest,
-    device: Device,
-    check: IPInterfaceCheck,
+    result: IPInterfaceCheckResult,
     msrd_data: ElementBase,
-) -> trt.CheckResultsCollection:
+    results: CheckResultsCollection,
+):
     """
     This function validates a specific interface use of an IP address against
     the design expectations.
     """
-    results = list()
+
+    check = result.check
+    expd_if_ipaddr = check.expected_results.if_ipaddr
+    msrd = result.measurement
 
     # get the interface name being tested
-
     if_name = check.check_id()
 
     msrd_if_addr = msrd_data.findtext("prefix")
-    msrd_if_ipaddr = f"{msrd_if_addr}/{msrd_data.findtext('masklen')}"
+    msrd.if_ipaddr = f"{msrd_if_addr}/{msrd_data.findtext('masklen')}"
 
-    # -------------------------------------------------------------------------
-    # Ensure the IP interface value matches.
-    # -------------------------------------------------------------------------
-
-    expd_if_ipaddr = check.expected_results.if_ipaddr
-
-    # if the IP address is marked as "is_reserved" it means that an external
-    # entity configured the IP address, and this check will only record the
-    # value as an INFO check result.
+    # if the design indicates the interfae is reserved, then pass the
+    # check and note this in the logs
 
     if expd_if_ipaddr == "is_reserved":
-        results.append(
-            trt.CheckInfoLog(
-                device=device,
-                check=check,
-                field="if_ipaddr",
-                measurement=msrd_if_ipaddr,
-            )
-        )
-    elif msrd_if_ipaddr != expd_if_ipaddr:
-        results.append(
-            trt.CheckFailFieldMismatch(
-                device=device,
-                check=check,
-                field="if_ipaddr",
-                measurement=msrd_if_ipaddr,
-            )
-        )
+        result.logs.INFO("reserved", dict(measured=msrd_if_addr))
+        results.append(result)
+        return
 
     # -------------------------------------------------------------------------
     # Ensure the IP interface is "up".
@@ -183,79 +145,57 @@ async def _check_one_interface(
     iface_enabled = dut_iface["enabled"] is True
 
     has_if_oper = msrd_data.findtext("proto-state")
+    msrd.oper_up = has_if_oper == "up"
 
-    if iface_enabled and (has_if_oper != "up"):
+    # if the interface is an SVI, then we need to check to see if _all_ of the
+    # associated physical interfaces are either disabled or in a reseverd
+    # condition.
 
-        # if the interface is an SVI, then we need to check to see if _all_ of
-        # the associated physical interfaces are either disabled or in a
-        # reseverd condition.
-
-        if if_name.startswith("Vlan"):
-
-            svi_res = await _check_vlan_assoc_interface(
-                dut, check, if_name=if_name, msrd_ipifaddr_oper=has_if_oper
-            )
-            results.extend(svi_res)
-
-        else:
-            results.append(
-                trt.CheckFailFieldMismatch(
-                    device=device,
-                    check=check,
-                    field="if_oper",
-                    expected="up",
-                    measurement=has_if_oper,
-                    error=f"IP exists {expd_if_ipaddr}, interface is not up: {has_if_oper}",
-                )
-            )
-
-    if not any_failures(results):
-        results.append(
-            trt.CheckPassResult(
-                device=device,
-                check=check,
-                measurement=dict(if_ipaddr=msrd_if_ipaddr, if_oper=has_if_oper),
-            )
+    if iface_enabled and not msrd.oper_up and if_name.startswith("Vlan"):
+        # updates the result
+        await _check_vlan_assoc_interface(
+            dut,
+            result=result,
+            if_name=if_name,
+            msrd_ipifaddr_oper=has_if_oper,
         )
+        results.append(result)
+        return
 
-    return results
+    # normal interface conditions, so measure before adding.
+    results.append(result.measure())
 
 
 def _test_exclusive_list(
-    device: Device, expd_if_names: Sequence[str], msrd_if_names: Sequence[str]
-) -> Generator:
+    device: Device,
+    expd_if_names: Sequence[str],
+    msrd_if_names: Sequence[str],
+    results: CheckResultsCollection,
+):
     """
     This check determines if there are any extra IP Interfaces defined on the
     device that are not expected per the design.
     """
 
-    # the previous per-interface checks for any missing; therefore we only need
-    # to check for any extra interfaces found on the device.
+    def sorted_by(if_name: str):
+        return DeviceInterface(if_name, interfaces=device.interfaces)
 
-    tc = IPInterfaceExclusiveListCheck(
-        expected_results=IPInterfaceList(if_names=list(expd_if_names))
+    result = IPInterfaceExclusiveListCheckResult(
+        device=device,
+        check=IPInterfaceExclusiveListCheck(expected_results=expd_if_names),
+        measurement=sorted(msrd_if_names, key=sorted_by),
     )
 
-    if extras := set(msrd_if_names) - set(expd_if_names):
-        result = trt.CheckFailExtraMembers(
-            device=device,
-            check=tc,
-            field="interfaces",
-            expected=sorted(expd_if_names),
-            extras=sorted(extras),
-        )
-    else:
-        result = trt.CheckPassResult(device=device, check=tc, measurement="exists")
-
-    yield result
+    results.append(result.measure())
 
 
 async def _check_vlan_assoc_interface(
     dut: NXAPIDeviceUnderTest,
-    check: IPInterfaceCheck,
+    result: IPInterfaceCheckResult,
     if_name: str,
     msrd_ipifaddr_oper: str,
-) -> trt.CheckResultsCollection:
+):
+
     """
     This function is used to check whether a VLAN SVI ip address is not "up"
     due to the fact that the underlying interfaces are either disabled or in a
@@ -268,8 +208,8 @@ async def _check_vlan_assoc_interface(
     dut:
         The device under test
 
-    check:
-        The specific test case
+    result:
+        The result instance for the given check
 
     if_name:
         The specific VLAN SVI name, "Vlan12" for example:
@@ -282,7 +222,6 @@ async def _check_vlan_assoc_interface(
     netcad test case results; one or more depending on the condition of SVI
     interfaces.
     """
-
     vlan_id = if_name.split("Vlan")[-1]
     cli_res = await dut.nxapi.cli(f"show vlan id {vlan_id}")
 
@@ -295,8 +234,6 @@ async def _check_vlan_assoc_interface(
     disrd_ifnames = set()
     dut_ifs = dut.device_info["interfaces"]
 
-    results = list()
-
     for check_ifname in vlan_cfgd_ifnames:
         dut_iface = dut_ifs[check_ifname]
         if (dut_iface["enabled"] is False) or (
@@ -304,34 +241,21 @@ async def _check_vlan_assoc_interface(
         ):
             disrd_ifnames.add(check_ifname)
 
+    # if all the interfaces in the VLAN are mared as "reserved" in the
+    # design, then mark this check as a PASS, and log some information.
+
     if disrd_ifnames == vlan_cfgd_ifnames:
-        results.append(
-            trt.CheckInfoLog(
-                device=dut.device,
-                check=check,
-                field="if_oper",
-                measurement=dict(
-                    if_oper=msrd_ipifaddr_oper,
-                    interfaces=list(vlan_cfgd_ifnames),
-                    message="interfaces are either disabled or in reserved state",
-                ),
-            )
+        result.logs.INFO(
+            "oper_up",
+            dict(
+                if_oper=msrd_ipifaddr_oper,
+                interfaces=list(vlan_cfgd_ifnames),
+                message="interfaces are either disabled or in reserved state",
+            ),
         )
 
-        results.append(
-            trt.CheckPassResult(device=dut.device, check=check, measurement="exists")
-        )
-        return results
+        # pass this check, do not call .measure
+        return
 
-    results.append(
-        trt.CheckFailFieldMismatch(
-            device=dut.device,
-            check=check,
-            field="if_oper",
-            expected="up",
-            measurement=msrd_ipifaddr_oper,
-            error=f"interface for IP {check.expected_results.if_ipaddr} is not up: {msrd_ipifaddr_oper}",
-        )
-    )
-
-    return results
+    # measure the results and return
+    result.measure()
