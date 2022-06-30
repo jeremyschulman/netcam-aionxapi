@@ -172,24 +172,13 @@ def _check_each_interface(
         # ---------------------------------------------------------------------
 
         if vlan_mo := _match_svi(if_name):
-
             # extract the VLAN ID value from the interface name; the lookup is
             # an int-as-string since that is how the data is encoded in the CLI
             # response object.
-
-            vlan_id = vlan_mo.group(1)
-            svi_oper_status = dev_svi_data.get(vlan_id)
-
-            # If the VLAN does not exist then the "interface Vlan<N>" does not
-            # exist on the device.
-
-            if svi_oper_status is None:
-                result.measurement = None
-                results.append(result.measure())
-                continue
-
             _check_one_svi(
-                svi_oper_status=svi_oper_status, result=result, results=results
+                svi_oper_status=dev_svi_data.get(vlan_mo.group(1)),
+                result=result,
+                results=results,
             )
 
             # done with Vlan interface, go to next test-case
@@ -378,7 +367,7 @@ def _check_one_loopback(
 
     key_val = attrgetter("tag", "text")
     st_dict = dict(map(key_val, ifip_oper_status.iterchildren()))
-    result.logs.INFO("status", status=st_dict)
+    result.logs.INFO("measurement", dict(measured=st_dict))
 
     # no need to .measure() since the existance of a loopback is a PASS.
     results.append(result)
@@ -394,6 +383,13 @@ def _check_one_svi(
     the design.
     """
 
+    # if the device data afor this SVI is missing then we are done.
+
+    if svi_oper_status is None:
+        result.measurement = None
+        results.append(result.measure())
+        return
+
     msrd = result.measurement
 
     # -------------------------------------------------------------------------
@@ -401,6 +397,7 @@ def _check_one_svi(
     # description field.
     # -------------------------------------------------------------------------
 
+    msrd.used = True
     msrd.desc = svi_oper_status.findtext("vlanshowbr-vlanname")
     msrd_status = svi_oper_status.findtext("vlanshowbr-vlanstate")
     msrd.oper_up = msrd_status == "active"
