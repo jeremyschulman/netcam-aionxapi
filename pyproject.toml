@@ -7,18 +7,22 @@ authors = ["Jeremy Schulman"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-httpx = "*"
-interrogate = "*"
 aio-nxapi = {path = "../aio-nxapi"}
-pydantic = "^1.9.1"
-lxml = "*"
+netcad = {path = "../netcadcam"}
 
 [tool.poetry.dev-dependencies]
-pytest = "*"
+pytest = "^7.1.*"
+invoke = "^1.7.0"
+black = "^23.*"
+flake8 = "^4.*"
+flake8-breakpoint = "^1.1.0"
+pytest-cov = "^2.12.1"
+pytest-asyncio = "^0.15.1"
+asynctest = "^0.13.0"
+tox = "^3.23.1"
+pre-commit = "^2.19.0"
+interrogate = "^1.5.0"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.interrogate]
     fail-under = 0
@@ -26,3 +30,8 @@ build-backend = "poetry.core.masonry.api"
     color = true
     ignore-module = true
     exclude = ["tasks.py", "examples", "build", "venv"]
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
