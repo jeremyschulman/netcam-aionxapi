@@ -179,8 +179,7 @@ def _check_one_interface(
     msrd = result.measurement
 
     # if there is no model value, then the transceiver does not exist.
-
-    msrd.model = if_xcvr_status.get("cisco_product_id")
+    msrd.model = if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
     msrd.type = if_xcvr_status["type"].upper()
 
     def on_mismatch(_field, _expd, _msrd):
