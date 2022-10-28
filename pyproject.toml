@@ -6,8 +6,8 @@ readme = "README.md"
 authors = ["Jeremy Schulman"]
 
 [tool.poetry.dependencies]
-python = ">=3.10.*,<3.11"
-aio-nxapi = {path = "../aio-nxapi"}
+python = "^3.10"
+aio-nxapi = "*"
 netcad = {path = "../netcadcam"}
 
 [tool.poetry.dev-dependencies]

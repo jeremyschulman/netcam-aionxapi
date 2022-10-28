@@ -1,19 +1,14 @@
 [[package]]
 name = "aio-nxapi"
-version = "0.5.0"
+version = "0.4.1"
 description = "Cisco NX-API asyncio client"
 category = "main"
 optional = false
-python-versions = "^3.10"
-develop = false
+python-versions = "*"
 
 [package.dependencies]
-httpx = "^0.23.0"
-lxml = "^4.9.1"
-
-[package.source]
-type = "directory"
-url = "../aio-nxapi"
+httpx = "*"
+lxml = "*"
 
 [[package]]
 name = "aiofiles"
@@ -442,7 +437,7 @@ python-versions = "*"
 
 [[package]]
 name = "netcad"
-version = "0.0.2"
+version = "0.0.3"
 description = "NetCAD - Network Automation by Design"
 category = "main"
 optional = false
@@ -459,7 +454,7 @@ Jinja2 = "^3.0.2"
 maya = "^0.6.1"
 pydantic = "^1.8.2"
 pydantic-env = "^0.2.0"
-rich = "^10.12.0"
+rich = "^12.6"
 toml = "^0.10.2"
 
 [package.source]
@@ -740,14 +735,13 @@ idna2008 = ["idna"]
 
 [[package]]
 name = "rich"
-version = "10.16.2"
+version = "12.6.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 category = "main"
 optional = false
-python-versions = ">=3.6.2,<4.0.0"
+python-versions = ">=3.6.3,<4.0.0"
 
 [package.dependencies]
-colorama = ">=0.4.0,<0.5.0"
 commonmark = ">=0.9.0,<0.10.0"
 pygments = ">=2.6.0,<3.0.0"
 
@@ -881,11 +875,14 @@ testing = ["coverage (>=6.2)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.10.*,<3.11"
-content-hash = "db40ffda67c4a21164cd5699dea216542757dffa5fea04739e46d3ebed601634"
+python-versions = "^3.10"
+content-hash = "71c1dd9918c21e8f749d7d02f7450ac3733346c772cfec4d35642b652fe1d431"
 
 [metadata.files]
-aio-nxapi = []
+aio-nxapi = [
+    {file = "aio-nxapi-0.4.1.tar.gz", hash = "sha256:b22a1383ca0e60b8d8d9f4bf70155b4448c3082b399ebfa6019ff6eb569f18b4"},
+    {file = "aio_nxapi-0.4.1-py3-none-any.whl", hash = "sha256:0e814e47bf4e4a1a62dffd89bfc7fc147022536501667e69e74252adeb124b33"},
+]
 aiofiles = [
     {file = "aiofiles-0.7.0-py3-none-any.whl", hash = "sha256:c67a6823b5f23fcab0a2595a289cec7d8c863ffcb4322fb8cd6b90400aedfdbc"},
     {file = "aiofiles-0.7.0.tar.gz", hash = "sha256:a1c4fc9b2ff81568c83e21392a82f344ea9d23da906e4f6a52662764545e19d4"},
@@ -1537,8 +1534,8 @@ rfc3986 = [
     {file = "rfc3986-1.5.0.tar.gz", hash = "sha256:270aaf10d87d0d4e095063c65bf3ddbc6ee3d0b226328ce21e036f946e421835"},
 ]
 rich = [
-    {file = "rich-10.16.2-py3-none-any.whl", hash = "sha256:c59d73bd804c90f747c8d7b1d023b88f2a9ac2454224a4aeaf959b21eeb42d03"},
-    {file = "rich-10.16.2.tar.gz", hash = "sha256:720974689960e06c2efdb54327f8bf0cdbdf4eae4ad73b6c94213cad405c371b"},
+    {file = "rich-12.6.0-py3-none-any.whl", hash = "sha256:a4eb26484f2c82589bd9a17c73d32a010b1e29d89f1604cd9bf3a2097b81bb5e"},
+    {file = "rich-12.6.0.tar.gz", hash = "sha256:ba3a3775974105c221d31141f2c116f4fd65c5ceb0698657a11e9f295ec93fd0"},
 ]
 setuptools = [
     {file = "setuptools-65.5.0-py3-none-any.whl", hash = "sha256:f62ea9da9ed6289bfe868cd6845968a2c854d1427f8548d52cae02a42b4f0356"},
