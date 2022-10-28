@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "netcam-aionxapi"
-version = "0.0.1"
+version = "0.0.2"
 description = "NetCAD driver for NX-OS NXAPI (asyncio)"
 readme = "README.md"
 authors = ["Jeremy Schulman"]
