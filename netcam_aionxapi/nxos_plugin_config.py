@@ -1,4 +1,4 @@
-#  Copyright 2022 Jeremy Schulman
+#  Copyright 2021 Jeremy Schulman
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,22 +16,20 @@
 # System Imports
 # -----------------------------------------------------------------------------
 
-import importlib.metadata as importlib_metadata
+from typing import Optional
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
 
-from netcad.device import Device
+from pydantic import BaseModel, Extra
+from pydantic_env.models import EnvSecretStr
 
 # -----------------------------------------------------------------------------
-# Private Imports
+# Exports
 # -----------------------------------------------------------------------------
 
-from . import nxapi_dut
-from .nxapi_dut import NXAPIDeviceUnderTest
-from .config.nxos_dcfg import NXOSDeviceConfigurable
-from .nxos_plugin_init import nxos_plugin_config
+__all__ = ["NXOSPluginConfig"]
 
 # -----------------------------------------------------------------------------
 #
@@ -39,30 +37,35 @@ from .nxos_plugin_init import nxos_plugin_config
 #
 # -----------------------------------------------------------------------------
 
-plugin_version = importlib_metadata.version(__name__)
-plugin_description = "Cisco NX-OS NXAPI systems (asyncio)"
+
+# -----------------------------------------------------------------------------
+# Use pydantic models to validate the User configuration file.  Configure
+# pydantic to prevent the User from providing (accidentally) any fields that are
+# not specifically supported; via the Extra.forbid config.
+# -----------------------------------------------------------------------------
 
 
-def plugin_get_dut(device: Device) -> NXAPIDeviceUnderTest:
-    if device.os_name != "nx-os":
-        raise RuntimeError(
-            f"{device.name} called NX-OS dut with improper os-name: {device.os_name}"
-        )
+class PluginEnvCreds(BaseModel, extra=Extra.forbid):
+    """
+    Define the environment variable names to source the username and password values.  When
+    provided, these will override the default values.
 
-    return NXAPIDeviceUnderTest(device=device)
+    The read-write (rw) values are used for configuration management.  The User
+    environment may not need these features, and therefore these config
+    parameters are optional.
+    """
 
-
-def plugin_get_dcfg(device: Device) -> NXOSDeviceConfigurable:
-    if device.os_name != "nx-os":
-        raise RuntimeError(
-            f"{device.name} called NX-OS config with improper os-name: {device.os_name}"
-        )
-
-    return NXOSDeviceConfigurable(device=device)
+    username: EnvSecretStr
+    password: EnvSecretStr
 
 
-def plugin_init(plugin_def: dict):
-    if not (config := plugin_def.get("config")):
-        raise RuntimeError("Missing IOS-XE driver config, please check.")
+class PluginEnvConfig(BaseModel, extra=Extra.forbid):
+    read: PluginEnvCreds
+    admin: Optional[PluginEnvCreds] = None
 
-    nxos_plugin_config(config)
+
+class NXOSPluginConfig(BaseModel, extra=Extra.forbid):
+    """define the schema for the plugin configuration"""
+
+    env: PluginEnvConfig
+    timeout: int = 60

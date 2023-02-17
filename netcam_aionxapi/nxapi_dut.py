@@ -42,7 +42,7 @@ from netcad.netcam.dut import AsyncDeviceUnderTest
 # Privae Imports
 # -----------------------------------------------------------------------------
 
-from .nxapi_config import g_nxapi
+from .nxos_plugin_globals import g_nxos
 
 # -----------------------------------------------------------------------------
 # Exports
@@ -82,7 +82,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
         super().__init__(device=device)
 
         # use JSON format by default
-        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxapi.basic_auth, timeout=60)
+        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxos.basic_auth, timeout=60)
         self.nxapi.ofmt = "json"
 
         self.version_info: Optional[dict] = None

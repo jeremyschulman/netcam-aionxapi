@@ -71,7 +71,6 @@ def _check_router_vrf(
     dev_data: ElementBase,
     results: CheckResultsCollection,
 ):
-
     check_vrf = check.check_params.vrf or DEFAULT_VRF_NAME
 
     e_bgp_spkr: ElementBase = dev_data.xpath(
