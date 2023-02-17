@@ -95,12 +95,14 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
     async def config_cancel(self):
         await self.ssh.cli("configure replace abort")
 
-    async def config_check(self, replace: Optional[bool | None] = None) -> bool:
+    async def config_check(self, replace: Optional[bool | None] = None) -> str | None:
         resp = await self.ssh.cli.send_command(
             f"configure replace {self.local_file} verify-only"
         )
-        self.config_diff_contents = resp.result
-        return "Patch validation completed successful" in resp.result
+
+        result = resp.result
+
+        return None if "Patch validation completed successful" in result else result
 
     async def config_diff(self) -> str:
         resp = await self.ssh.cli.send_command(
