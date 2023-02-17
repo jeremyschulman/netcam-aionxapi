@@ -50,7 +50,7 @@ _Caps = AsyncDeviceConfigurable.Capabilities
 
 
 class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
-    DEFAULT_CAPABILITIES = _Caps.diff | _Caps.rollback | _Caps.replace
+    DEFAULT_CAPABILITIES = _Caps.check | _Caps.diff | _Caps.rollback | _Caps.replace
 
     def __init__(self, *, device: Device, **_kwargs):
         """
@@ -67,6 +67,10 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         )
         self.capabilities = self.DEFAULT_CAPABILITIES
         self._scp_creds = (username, password)
+
+    @property
+    def local_file(self):
+        return f"bootflash:{self.config_file.name}"
 
     def _set_config_id(self, name: str):
         pass
@@ -89,14 +93,18 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         return resp.result
 
     async def config_cancel(self):
-        pass
+        await self.ssh.cli("configure replace abort")
 
-    async def config_check(self, replace: Optional[bool | None] = None):
-        raise RuntimeError("NX-OS does not support config-check")
+    async def config_check(self, replace: Optional[bool | None] = None) -> bool:
+        resp = await self.ssh.cli.send_command(
+            f"configure replace {self.local_file} verify-only"
+        )
+        self.config_diff_contents = resp.result
+        return "Patch validation completed successful" in resp.result
 
     async def config_diff(self) -> str:
         resp = await self.ssh.cli.send_command(
-            f"show archive config differences flash:{self.config_file.name}"
+            f"configure replace {self.local_file} show-patch"
         )
         self.config_diff_contents = resp.result
         return self.config_diff_contents
@@ -105,23 +113,42 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         # get the config difference before the config is applied since that is
         # the way IOS-XE operates.
 
-        await self.config_diff()
+        any_errs_re = re.compile(r"fail|abort|error", flags=re.I)
+
+        if any_errs_re.search(await self.config_diff()):
+            raise RuntimeError(
+                f"{self.device.name}: FAIL: diff-check: {self.config_diff_contents}"
+            )
+
+        # NX-OS timer rollback is in seconds
+        timeout_sec = rollback_timeout * 60
 
         resp = await self.ssh.cli.send_command(
-            f"configure replace flash:{self.config_file.name} "
-            f"force revert trigger error timer {rollback_timeout}"
+            f"configure replace {self.local_file} commit-timeout {timeout_sec}"
         )
 
-        # if there is an error in the config, then raise the exception.
-        # IOS-XE will revert the config based on the time.
+        # if there is an error in the config, then raise the exception. NX-OS
+        # will revert the config based on the time.
 
-        if re.search(r"fail|abort|error", resp.result, flags=re.I):
+        if any_errs_re.search(resp.result):
             raise RuntimeError(
                 f"{self.device.name}: FAIL: config-replace: {resp.result}"
             )
 
-        # otherwise the configuration is good, and confirm it now.from
-        await self.ssh.cli.send_command("configure confirm")
+        # now we need to check to ensure the device is still reachabile
+
+        if not await self.is_reachable():
+            raise RuntimeError(
+                f"{self.device.name}: FAIL: device is no longer reachable. "
+                f"Config will rollback in {rollback_timeout} minutes ..."
+            )
+
+        # otherwise the configuration is good, and confirm it now and save to
+        # startup.
+
+        await self.ssh.cli.send_commands(
+            commands=["configure replace commit", "copy running-config startup-config"]
+        )
 
     async def config_merge(self, rollback_timeout: int):
         raise RuntimeError("NX-OS config-merge not supported at this time.")
@@ -132,4 +159,4 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         previously copied to the remote device.  This function is expected to
         be called during a "cleanup" process.
         """
-        await self.ssh.cli.send_command(f"delete /force flash:{self.config_file.name}")
+        await self.ssh.cli.send_command(f"delete {self.local_file} no-prompt")
