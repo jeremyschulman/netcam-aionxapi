@@ -13,54 +13,52 @@
 #  limitations under the License.
 
 # -----------------------------------------------------------------------------
+# System Imports
+# -----------------------------------------------------------------------------
+
+from typing import Optional, Tuple
+from dataclasses import dataclass
+
+# -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
 
-from netcad.device import Device
+from httpx import BasicAuth
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netcam_aionxapi.nxapi_dut import NXAPIDeviceUnderTest
+from .nxos_plugin_config import NXOSPluginConfig
 
 # -----------------------------------------------------------------------------
 # Exports
 # -----------------------------------------------------------------------------
 
-__all__ = ["plugin_get_dut"]
-
-# -----------------------------------------------------------------------------
-#
-#                            CODE BEGINS
-#
-# -----------------------------------------------------------------------------
+__all__ = ["g_nxos"]
 
 
-def plugin_get_dut(device: Device) -> NXAPIDeviceUnderTest:
+@dataclass
+class NXOSGlobals:
     """
-    This function is the required netcam plugin hook that allows the netcam tool
-    to obtain the DUT instance for a specific device.  The device instance MUST*
-    have the os_name attribute set to "nx-os".
+    Define a class to encapsulate the global variables used by this plugin.
 
-    Parameters
+    Attributes
     ----------
-    device: Device
-        The device instance used to originate the DUT instance.
-
-    Raises
-    ------
-    RuntimeError
-        When the device instance is not os_name=="eos"
-
-    Returns
-    -------
-    The EOS device-under-test instance used for operational checking.
+    config: dict
+        This is the plugin configuration dictionary as declared in the User
+        `netcad.toml` configuration file.
     """
 
-    if device.os_name != "nx-os":
-        raise RuntimeError(
-            f"Missing required DUT class for device {device.name}, os_name: {device.os_name}"
-        )
+    config: Optional[NXOSPluginConfig] = None
+    auth_read: Optional[Tuple[str, str]] = None
+    auth_admin: Optional[Tuple[str, str]] = None
+    basic_auth_read: Optional[BasicAuth] = None
 
-    return NXAPIDeviceUnderTest(device=device)
+
+# -----------------------------------------------------------------------------
+# Globals
+# -----------------------------------------------------------------------------
+
+# the global variables used by this plugin
+g_nxos = NXOSGlobals()

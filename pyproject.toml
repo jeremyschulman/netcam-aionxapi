@@ -1,26 +1,25 @@
 [tool.poetry]
-name = "netcam-aionxapi"
-version = "0.0.2"
-description = "NetCAD driver for NX-OS NXAPI (asyncio)"
-readme = "README.md"
-authors = ["Jeremy Schulman"]
+    name = "netcam-aionxapi"
+    version = "0.1.0"
+    description = "NX-OS NXAPI (asyncio) driver for NetCAD/CAM"
+    readme = "README.md"
+    authors = ["Jeremy Schulman"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-aio-nxapi = "*"
-netcad = {path = "../netcadcam"}
+    python = "^3.10"
+    aio-nxapi = "*"
+    netcad = ">=0.5.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "*"
-invoke = "*"
-black = "*"
-flake8 = "*"
-flake8-breakpoint = "*"
-pytest-cov = "*"
-pytest-asyncio = "*"
-pre-commit = "*"
-interrogate = "*"
-
+    pytest = "*"
+    invoke = "*"
+    black = "*"
+    flake8 = "*"
+    flake8-breakpoint = "*"
+    pytest-cov = "*"
+    pytest-asyncio = "*"
+    pre-commit = "*"
+    interrogate = "*"
 
 [tool.interrogate]
     fail-under = 0
@@ -31,5 +30,5 @@ interrogate = "*"
 
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+    requires = ["poetry-core>=1.0.0"]
+    build-backend = "poetry.core.masonry.api"

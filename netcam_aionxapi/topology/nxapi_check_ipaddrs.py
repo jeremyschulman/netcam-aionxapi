@@ -195,7 +195,6 @@ async def _check_vlan_assoc_interface(
     if_name: str,
     msrd_ipifaddr_oper: str,
 ):
-
     """
     This function is used to check whether a VLAN SVI ip address is not "up"
     due to the fact that the underlying interfaces are either disabled or in a
