@@ -24,7 +24,7 @@ import re
 # -----------------------------------------------------------------------------
 
 from netcad.device import Device
-from netcad.netcam.dev_config import AsyncDeviceConfigurable
+from netcam.dcfg import AsyncDeviceConfigurable
 
 # -----------------------------------------------------------------------------
 # Privae Imports

@@ -36,7 +36,7 @@ from aionxapi import Device as DeviceNXAPI
 
 from netcad.device import Device
 from netcad.checks import CheckCollection, CheckResultsCollection
-from netcad.netcam.dut import AsyncDeviceUnderTest
+from netcam.dut import AsyncDeviceUnderTest
 
 # -----------------------------------------------------------------------------
 # Privae Imports
