@@ -15,7 +15,6 @@
     invoke = "*"
     black = "*"
     flake8 = "*"
-    flake8-breakpoint = "*"
     pytest-cov = "*"
     pytest-asyncio = "*"
     pre-commit = "*"

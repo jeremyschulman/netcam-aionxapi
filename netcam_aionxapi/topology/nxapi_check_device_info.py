@@ -66,7 +66,6 @@ async def nxapi_check_device_info(
     # check the product model, but discount any of the "front-back" designation
 
     exp_product_model = check.expected_results.product_model
-
     dev_hw = await dut.nxapi.cli("show hardware")
     hw_row = dut.dig(dev_hw, "TABLE_slot.ROW_slot.TABLE_slot_info.ROW_slot_info.0")
 

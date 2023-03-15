@@ -82,7 +82,9 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
         super().__init__(device=device)
 
         # use JSON format by default
-        self.nxapi = DeviceNXAPI(host=device.name, auth=g_nxos.basic_auth, timeout=60)
+        self.nxapi = DeviceNXAPI(
+            host=device.name, auth=g_nxos.basic_auth_read, timeout=60
+        )
         self.nxapi.ofmt = "json"
 
         self.version_info: Optional[dict] = None
@@ -156,7 +158,6 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
     async def setup(self):
         """DUT setup process"""
         await super().setup()
-
         if not await self.nxapi.check_connection():
             raise RuntimeError(
                 f"Unable to connect to NXAPI on device: {self.device.name}: "
