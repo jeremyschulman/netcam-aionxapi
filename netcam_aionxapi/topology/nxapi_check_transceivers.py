@@ -168,21 +168,24 @@ def _check_one_interface(
     transceiver as defined in the design.
     """
 
-    # if there is no entry for this interface, then the transceiver does not
-    # exist.
+    # if there is no model value, then the transceiver does not exist. if there
+    # is no entry for this interface, then the transceiver does not exist.
 
-    if not if_xcvr_status:
+    has_model = (
+        if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
+    )
+
+    if (not if_xcvr_status) or (not has_model):
         result.measurement = None
         results.append(result.measure())
         return
 
     msrd = result.measurement
-
-    # if there is no model value, then the transceiver does not exist.
+    msrd.model = has_model
 
     msrd.model = (
         if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
-    ).strip()
+    )
 
     msrd.type = if_xcvr_status["type"].upper().strip()
 
