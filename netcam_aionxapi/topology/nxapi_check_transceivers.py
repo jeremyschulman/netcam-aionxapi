@@ -139,7 +139,7 @@ def _check_exclusive_list(
     """
     Check to ensure that the list of transceivers found on the device matches the exclusive list.
     This check helps to find "unused" optics; or report them so that a Designer can account for them
-    in the design-notes.
+    in the design-notepad.
     """
 
     check = TransceiverExclusiveListCheck(expected_results=expd_ports)
@@ -171,9 +171,7 @@ def _check_one_interface(
     # if there is no model value, then the transceiver does not exist. if there
     # is no entry for this interface, then the transceiver does not exist.
 
-    has_model = (
-        if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
-    )
+    has_model = if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
 
     if (not if_xcvr_status) or (not has_model):
         result.measurement = None
@@ -183,9 +181,7 @@ def _check_one_interface(
     msrd = result.measurement
     msrd.model = has_model
 
-    msrd.model = (
-        if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
-    )
+    msrd.model = if_xcvr_status.get("cisco_product_id") or if_xcvr_status.get("partnum")
 
     msrd.type = if_xcvr_status["type"].upper().strip()
 
