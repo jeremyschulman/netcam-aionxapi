@@ -36,7 +36,7 @@ from aionxapi import Device as DeviceNXAPI
 
 from netcad.device import Device
 from netcad.checks import CheckCollection, CheckResultsCollection
-from netcam.dut import AsyncDeviceUnderTest
+from netcam.dut import AsyncDeviceUnderTest, SetupError
 
 # -----------------------------------------------------------------------------
 # Privae Imports
@@ -159,7 +159,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
         """DUT setup process"""
         await super().setup()
         if not await self.nxapi.check_connection():
-            raise RuntimeError(
+            raise SetupError(
                 f"Unable to connect to NXAPI on device: {self.device.name}: "
                 "Device offline or NXAPI is not enabled, check config."
             )
@@ -168,7 +168,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
             self.version_info = await self.nxapi.cli("show version")
 
         except httpx.HTTPError as exc:
-            rt_exc = RuntimeError(
+            rt_exc = SetupError(
                 f"Unable to connect to NXAPI device {self.device.name}: {str(exc)}"
             )
             rt_exc.__traceback__ = exc.__traceback__
