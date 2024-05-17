@@ -97,7 +97,7 @@ class NXAPIDeviceUnderTest(AsyncDeviceUnderTest):
 
     # -------------------------------------------------------------------------
     #
-    #                       EOS DUT Specific Methods
+    #                       NXOS DUT Specific Methods
     #
     # -------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ from netcad.bgp_peering.bgp_nei_state import BgpNeighborState
 
 DEFAULT_VRF_NAME = "default"
 
-# This mapping table is used to map the EOS Device string value reported in the
+# This mapping table is used to map the NXOS Device string value reported in the
 # "show" command to the BGP neighbor state Enum defined in the check expected
 # value.
 

@@ -254,13 +254,13 @@ def _check_exclusive_interfaces_list(
 
 
 # -----------------------------------------------------------------------------
-# EOS Measurement dataclass
+# NXOS Measurement dataclass
 # -----------------------------------------------------------------------------
 
 
 class NXAPIInterfaceMeasurement(InterfaceCheckMeasurement):
     """
-    This dataclass is used to store the values as retrieved from the EOS device
+    This dataclass is used to store the values as retrieved from the NXOS device
     into a set of attributes that align to the test-case.
     """
 
@@ -273,7 +273,7 @@ class NXAPIInterfaceMeasurement(InterfaceCheckMeasurement):
 
     @classmethod
     def from_cli(cls, cli_payload: ElementBase):
-        """returns an EOS specific measurement mapping the CLI object fields"""
+        """returns an NXOS specific measurement mapping the CLI object fields"""
         return cls(
             used=cli_payload.findtext("state") != "disabled",
             oper_up=cli_payload.findtext("state") == "connected",

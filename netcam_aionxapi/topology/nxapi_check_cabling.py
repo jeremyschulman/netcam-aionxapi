@@ -53,10 +53,10 @@ async def nxapi_test_cabling(
     dut, testcases: InterfaceCablingCheckCollection
 ) -> CheckResultsCollection:
     """
-    Support the "cabling" tests for Arista EOS devices.  These tests are
+    Support the "cabling" tests for Cisco NXOS devices.  These tests are
     implementeding by examing the LLDP neighborship status.
 
-    This function is imported directly into the EOS DUT class defintion.
+    This function is imported directly into the NXOS DUT class defintion.
 
     Parameters
     ----------

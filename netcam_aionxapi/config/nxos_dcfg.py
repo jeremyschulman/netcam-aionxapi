@@ -164,6 +164,9 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         if not await self.is_reachable():
             raise RuntimeError(f"{self.device.name}: device is no longer reachable.")
 
+        # check for diff
+        self.config_diff_contents = await self.config_diff()
+
         # copy running to startup
         log.info(f"{self.device.name}: saving to startup ...")
 
