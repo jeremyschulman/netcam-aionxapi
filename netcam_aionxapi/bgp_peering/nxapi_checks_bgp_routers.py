@@ -31,12 +31,12 @@ async def check_bgp_neighbors(
     self, check_bgp_routers: BgpRoutersCheckCollection
 ) -> CheckResultsCollection:
     """
-    This function is responsible for validating the EOS device IP BGP neighbors
+    This function is responsible for validating the NXOS device IP BGP neighbors
     are operationally correct.
 
     Parameters
     ----------
-    self: EOSDeviceUnderTest
+    self: NXOSDeviceUnderTest
         *** DO NOT TYPEHINT because registration will fail if you do ***
 
     check_bgp_routers: BgpRoutersCheckCollection

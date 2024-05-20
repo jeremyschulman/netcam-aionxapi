@@ -32,6 +32,7 @@ from netcam.dcfg import AsyncDeviceConfigurable
 
 from netcam_aionxapi.nxos_aiossh import NXOSAsyncSSHDriver
 from netcam_aionxapi.nxos_plugin_globals import g_nxos
+from netcad.logger import get_logger
 
 # -----------------------------------------------------------------------------
 # Exports
@@ -105,9 +106,7 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         return None if "Patch validation completed successful" in result else result
 
     async def config_diff(self) -> str:
-        resp = await self.ssh.cli.send_command(
-            f"configure replace {self.local_file} show-patch"
-        )
+        resp = await self.ssh.cli.send_command("show running-config diff")
         self.config_diff_contents = resp.result
         return self.config_diff_contents
 
@@ -153,7 +152,29 @@ class NXOSDeviceConfigurable(AsyncDeviceConfigurable):
         )
 
     async def config_merge(self, rollback_timeout: int):
-        raise RuntimeError("NX-OS config-merge not supported at this time.")
+        log = get_logger()
+        any_errs_re = re.compile(r"fail|abort|error", flags=re.I)
+        resp = await self.ssh.cli.send_command(f"copy {self.local_file} running-config")
+        if any_errs_re.search(resp.result):
+            raise RuntimeError(
+                f"{self.device.name}: FAIL: copy bootflash running-config: {resp.result}"
+            )
+
+        log.info(f"{self.device.name}: checking device reachability ...")
+        if not await self.is_reachable():
+            raise RuntimeError(f"{self.device.name}: device is no longer reachable.")
+
+        # check for diff
+        self.config_diff_contents = await self.config_diff()
+
+        # copy running to startup
+        log.info(f"{self.device.name}: saving to startup ...")
+
+        resp = await self.ssh.cli.send_command("copy running-config startup-config")
+        if any_errs_re.search(resp.result):
+            raise RuntimeError(
+                f"{self.device.name}: FAIL: copy running-config startup-config: {resp.result}"
+            )
 
     async def file_delete(self):
         """

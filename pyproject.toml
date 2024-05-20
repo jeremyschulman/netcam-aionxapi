@@ -1,9 +1,9 @@
 [tool.poetry]
     name = "netcam-aionxapi"
-    version = "0.1.4"
+    version = "0.2.0"
     description = "NX-OS NXAPI (asyncio) driver for NetCAD/CAM"
     readme = "README.md"
-    authors = ["Jeremy Schulman"]
+    authors = ["Jeremy Schulman", "Mike Hutt"]
 
 [tool.poetry.dependencies]
     python = "^3.10"
