@@ -31,7 +31,7 @@ from lxml.etree import ElementBase
 from netcad.device import Device, DeviceInterface
 from netcad.checks import CheckResultsCollection, CheckStatus
 
-from netcad.topology.checks.check_interfaces import (
+from netcad.feats.topology.checks.check_interfaces import (
     InterfaceExclusiveListCheck,
     InterfaceExclusiveListCheckResult,
     InterfaceCheckCollection,
