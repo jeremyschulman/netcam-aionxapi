@@ -4,7 +4,7 @@
 
 from lxml.etree import ElementBase
 
-from netcad.bgp_peering.checks import (
+from netcad.feats.bgp_peering import (
     BgpRoutersCheckCollection,
     BgpRouterCheck,
     BgpRouterCheckResult,

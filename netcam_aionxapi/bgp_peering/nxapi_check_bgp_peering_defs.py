@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 
 from types import MappingProxyType
-from netcad.bgp_peering.bgp_nei_state import BgpNeighborState
+from netcad.feats.bgp_peering import BgpNeighborState
 
 
 DEFAULT_VRF_NAME = "default"
