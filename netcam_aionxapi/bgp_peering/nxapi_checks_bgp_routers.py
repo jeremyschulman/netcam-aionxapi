@@ -81,7 +81,7 @@ def _check_router_vrf(
     msrd = result.measurement
 
     # from the device, routerId is a string
-    msrd.router_id = e_bgp_spkr.findtext("router-id", default="")
+    msrd.nei_ip = e_bgp_spkr.findtext("router-id", default="")
 
     # from the device, asn is a string-int
     msrd.asn = int(e_bgp_spkr.findtext("local-as", default="0"))
